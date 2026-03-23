@@ -1,0 +1,6 @@
+rank,postcode,stad,wijk,match_score,inwoners,cbs_inkomen,cbs_leeftijd,cbs_pct_vrouw,cbs_pct_hbo,cbs_pct_koop,jouw_postcode,jouw_inkomen,jouw_leeftijd,jouw_pct_vrouw
+1,5038,Tilburg,Noord,92.9,7100,38000,34,51,46,52,4001,35000,35,68
+2,8011,Zwolle,Binnenstad,87.6,6700,44000,36,51,58,55,4001,35000,35,68
+3,5042,Tilburg,Reeshof,85.8,9200,41000,40,52,48,69,4001,35000,35,68
+4,2555,Den Haag,Loosduinen,77.8,9800,50000,39,52,64,72,4001,35000,35,68
+5,3583,Utrecht,Utrecht Oost,76.5,12100,54000,36,51,71,68,4001,35000,35,68

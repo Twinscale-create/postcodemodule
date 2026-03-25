@@ -288,6 +288,24 @@ body::before {
 input[type='text'], input[type='search'] { color-scheme: dark; }
 input::placeholder { color: var(--t-4); }
 
+/* ── Keyboard focus (accessibility) ─────────────── */
+/* Verberg focus ring voor muis, toon voor toetsenbord */
+:focus { outline: none; }
+:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+button:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(32,176,144,0.15);
+}
+input:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 0;
+}
+
 /* ── Buttons ────────────────────────────────────── */
 .ts-btn {
   font-family: var(--font);

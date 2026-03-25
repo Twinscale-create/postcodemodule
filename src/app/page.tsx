@@ -51,5 +51,23 @@ export default async function Home() {
     getKansen(),
     getKlantDichtheid(),
   ])
-  return <Dashboard matches={matches} kansen={kansen} klantGebieden={klantGebieden} />
+
+  // Fetch CBS demographics for all klantgebied postcodes
+  const postcodes = klantGebieden.map(k => k.postcode)
+  const { data: cbsRows } = postcodes.length > 0
+    ? await supabase
+        .from('pc4_cbs')
+        .select('postcode, cbs_leeftijd, pct_vrouw, pct_koop')
+        .in('postcode', postcodes)
+    : { data: [] }
+
+  const cbsMap = new Map((cbsRows ?? []).map(r => [r.postcode, r]))
+  const klantGebiedenWithCbs = klantGebieden.map(k => ({
+    ...k,
+    cbs_leeftijd: cbsMap.get(k.postcode)?.cbs_leeftijd ?? undefined,
+    pct_vrouw:    cbsMap.get(k.postcode)?.pct_vrouw    ?? undefined,
+    pct_koop:     cbsMap.get(k.postcode)?.pct_koop     ?? undefined,
+  }))
+
+  return <Dashboard matches={matches} kansen={kansen} klantGebieden={klantGebiedenWithCbs} />
 }

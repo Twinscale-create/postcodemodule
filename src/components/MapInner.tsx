@@ -54,7 +54,7 @@ function DataBounds({ kansen }: { kansen: KansPunt[] }) {
 function FlyToController({ target }: { target: { lat: number; lon: number; zoom?: number } | null }) {
   const map = useMap()
   useEffect(() => {
-    if (target) {
+    if (target && isFinite(target.lat) && isFinite(target.lon)) {
       map.flyTo([target.lat, target.lon], target.zoom ?? 13, { animate: true, duration: 0.8 })
     }
   }, [target, map])

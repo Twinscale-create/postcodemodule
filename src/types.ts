@@ -13,6 +13,9 @@ export interface KlantGebied {
   klant_count: number
   inwoners?: number
   cbs_inkomen?: number
+  cbs_leeftijd?: number
+  pct_vrouw?: number
+  pct_koop?: number
 }
 
 export interface KansPunt {

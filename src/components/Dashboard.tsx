@@ -6,6 +6,9 @@ import { Match, HeatMode, KansPunt, KlantGebied, CbsData } from '@/types'
 import { getStad } from '@/lib/postcodeStad'
 import { getCoordsSync } from '@/lib/geocode'
 import DutchMap from './DutchMap'
+import ShaderBackground from './ShaderBackground'
+import KlantenShader from './KlantenShader'
+import KansenShader from './KansenShader'
 import { supabase } from '@/lib/supabase'
 import { animate, stagger } from 'animejs'
 
@@ -43,11 +46,15 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
   const [loadingKlantCbs,  setLoadingKlantCbs]  = useState(false)
   const [flyTarget, setFlyTarget] = useState<{ lat: number; lon: number; zoom?: number } | null>(null)
 
-  const cbsKansRef    = useRef<HTMLDivElement>(null)
-  const cbsKlantRef   = useRef<HTMLDivElement>(null)
-  const kansenRowsRef = useRef<HTMLDivElement>(null)
-  const kpiObj        = useRef({ total: 0, gebieden: 0, pen: 0 })
-  const [kpiDisplay, setKpiDisplay] = useState({ total: 0, gebieden: 0, pen: '0.0' })
+  const cbsKansRef      = useRef<HTMLDivElement>(null)
+  const cbsKlantRef     = useRef<HTMLDivElement>(null)
+  const kansenRowsRef   = useRef<HTMLDivElement>(null)
+  const kpiObj          = useRef({ total: 0, gebieden: 0, pen: 0 })
+
+  // Spell: sliding tab indicator + toggle pill
+  const tabBarRef       = useRef<HTMLDivElement>(null)
+  const tabIndicatorRef = useRef<HTMLDivElement>(null)
+  const pillRef         = useRef<HTMLDivElement>(null)
 
   const overviewTarget = (() => {
     const top = kansen.filter(k => k.score >= 40).slice(0, 10)
@@ -177,17 +184,17 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
   useLayoutEffect(() => {
     if (!selectedCbs || !cbsKansRef.current) return
     const cards = cbsKansRef.current.querySelectorAll('[data-cbs-card]')
-    animate(cards, { translateY: [14, 0], opacity: [0, 1], duration: 480, easing: 'easeOutExpo', delay: stagger(55) })
+    animate(cards, { translateY: [14, 0], opacity: [0, 1], duration: 1100, easing: 'easeOutExpo', delay: stagger(110) })
   }, [selectedCbs])
 
   // ── Anime.js: CBS card reveal — klant panel
   useLayoutEffect(() => {
     if (!selectedKlantCbs || !cbsKlantRef.current) return
     const cards = cbsKlantRef.current.querySelectorAll('[data-cbs-card]')
-    animate(cards, { translateY: [14, 0], opacity: [0, 1], duration: 480, easing: 'easeOutExpo', delay: stagger(55) })
+    animate(cards, { translateY: [14, 0], opacity: [0, 1], duration: 1100, easing: 'easeOutExpo', delay: stagger(110) })
   }, [selectedKlantCbs])
 
-  // ── Anime.js: score bars kansen tab
+  // ── Anime.js: score bars — Spell 6: bounce fill
   useEffect(() => {
     if (viewTab !== 'postcodes' || !kansenRowsRef.current) return
     const bars = kansenRowsRef.current.querySelectorAll('.ts-score-bar')
@@ -196,40 +203,31 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
     animate(bars as any, {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       width:    (el: any) => (el as HTMLElement).dataset.target + '%',
-      duration: 700,
-      easing:   'easeOutExpo',
-      delay:    stagger(22),
+      duration: 2400,
+      easing:   'easeOutElastic(1, 0.4)',   // bounce!
+      delay:    stagger(45),
     })
   }, [viewTab, topKansen.length, kansenSort, kansenSortDir])
 
-  // ── Anime.js: KPI counters klanten tab
-  useEffect(() => {
-    if (viewTab !== 'klanten') return
-    const total      = klantGebieden.reduce((s, k) => s + k.klant_count, 0)
-    const validPen   = klantGebieden.filter(k => (k.inwoners ?? 0) > 0)
-    const avgPenVal  = validPen.length > 0
-      ? validPen.reduce((s, k) => s + k.klant_count / k.inwoners!, 0) / validPen.length * 100
-      : 0
-    kpiObj.current = { total: 0, gebieden: 0, pen: 0 }
-    setKpiDisplay({ total: 0, gebieden: 0, pen: '0.0' })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const anim = animate(kpiObj.current as any, {
-      total:    total,
-      gebieden: klantGebieden.length,
-      pen:      avgPenVal,
-      duration: 900,
-      easing:   'easeOutExpo',
-      onUpdate: () => setKpiDisplay({
-        total:    Math.round(kpiObj.current.total),
-        gebieden: Math.round(kpiObj.current.gebieden),
-        pen:      kpiObj.current.pen.toFixed(1),
-      }),
-    })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return () => { (anim as any).cancel?.() }
-  }, [viewTab, klantGebieden])
 
-  // Kansen color scale — earthy terracotta/amber on forest green
+  // ── Spell: sliding tab indicator
+  useEffect(() => {
+    const indicator = tabIndicatorRef.current
+    if (!indicator) return
+    const idx = ['kaart', 'postcodes', 'klanten'].indexOf(viewTab)
+    indicator.style.transform = `translateX(${idx * 300}%)`
+    indicator.style.background = viewTab === 'klanten' ? 'var(--accent-2)' : 'var(--accent)'
+  }, [viewTab])
+
+  // ── Spell: toggle pill
+  useEffect(() => {
+    const pill = pillRef.current
+    if (!pill) return
+    pill.style.transform = heatMode === 'klanten' ? 'translateX(100%)' : 'translateX(0)'
+    pill.style.background = heatMode === 'klanten' ? 'rgba(103,191,218,0.14)' : 'var(--accent-bg)'
+  }, [heatMode])
+
+  // ── Kansen color scale — earthy terracotta/amber on forest green
   const kansColor = (score: number) =>
     score >= 85 ? '#D44030' : score >= 70 ? '#CC6820' : score >= 55 ? '#C48830' : score >= 35 ? '#B8A440' : '#9AB840'
 
@@ -249,35 +247,57 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
 
   const top10 = topKansen.slice(0, 10)
 
-  const themeGradient =
-    viewTab === 'postcodes'
-      ? 'radial-gradient(ellipse 90% 55% at 50% 0%, rgba(90,0,20,0.85) 0%, rgba(30,0,8,0.6) 50%, transparent 100%), linear-gradient(180deg, #0E0003 0%, #060205 60%, #030204 100%)'
-      : viewTab === 'klanten'
-      ? 'radial-gradient(ellipse 100% 60% at 50% 0%, rgba(0,50,160,0.95) 0%, rgba(0,20,70,0.7) 45%, transparent 100%), linear-gradient(180deg, #00040E 0%, #020408 60%, #030404 100%)'
-      : undefined
+  // ── Spell: Ripple on click
+  function triggerRipple(e: React.MouseEvent, color: string) {
+    const el = e.currentTarget as HTMLElement
+    const rect = el.getBoundingClientRect()
+    const span = document.createElement('span')
+    span.className = 'ts-ripple'
+    span.style.left = `${e.clientX - rect.left - 14}px`
+    span.style.top  = `${e.clientY - rect.top  - 14}px`
+    span.style.background = color
+    el.style.overflow = 'hidden'
+    el.appendChild(span)
+    setTimeout(() => span.remove(), 1500)
+  }
+
+  // ── Spell: Digit flip component
+  function FlipNumber({ value, style }: { value: string | number; style?: React.CSSProperties }) {
+    const str = String(value)
+    return (
+      <span style={{ display: 'inline-flex', ...style }}>
+        {str.split('').map((ch, i) => (
+          <span key={`${str.length}-${i}-${ch}`} className="ts-flip-char"
+            style={{ animationDelay: `${i * 48}ms` }}>
+            {ch}
+          </span>
+        ))}
+      </span>
+    )
+  }
 
   return (
-    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: themeGradient ?? 'var(--bg)', transition: 'background 0.5s ease', fontFamily: 'var(--font)' }}>
+    <div className="ts-root">
+      {/* ── Shader achtergronden — altijd gemount, opacity fade op tab-switch ── */}
+      <div style={{ position: 'fixed', inset: 0, zIndex: -1, pointerEvents: 'none', opacity: viewTab === 'kaart' ? 1 : 0, transition: 'opacity 0.12s ease' }}>
+        <ShaderBackground />
+      </div>
+      <div style={{ position: 'fixed', inset: 0, zIndex: -1, pointerEvents: 'none', opacity: viewTab === 'postcodes' ? 1 : 0, transition: 'opacity 0.12s ease' }}>
+        <KansenShader />
+      </div>
+      <div style={{ position: 'fixed', inset: 0, zIndex: -1, pointerEvents: 'none', opacity: viewTab === 'klanten' ? 1 : 0, transition: 'opacity 0.12s ease' }}>
+        <KlantenShader />
+      </div>
 
       {/* ══════════════════════════════════════════
           INSIGHT STRIP
       ══════════════════════════════════════════ */}
-      <div style={{
-        height: `${DASH_H}px`, minHeight: `${DASH_H}px`,
-        display: 'flex',
-        borderBottom: `1px solid ${S.bdr}`,
-        background: 'transparent',
-        flexShrink: 0, overflow: 'hidden',
-      }}>
+      <div className="ts-insight-strip">
 
         {/* ── LEFT: kansen list ── */}
-        <div style={{
-          flex: '0 0 32%', padding: '12px 14px',
-          borderRight: `1px solid ${S.bdr}`,
-          display: 'flex', flexDirection: 'column', overflow: 'hidden',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', flexShrink: 0 }}>
-            <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'var(--accent)', opacity: 0.85, flexShrink: 0 }} />
+        <div className="ts-panel-left">
+          <div className="ts-section-header">
+            <div className="ts-dot ts-dot--amber" />
             <span className="ts-label">Top {topKansen.length} kansen</span>
           </div>
           <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1px' }}>
@@ -318,7 +338,7 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
         </div>
 
         {/* ── RIGHT: KPI overview / targeting panel ── */}
-        <div style={{ flex: 1, padding: '12px 16px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div className="ts-panel-right">
 
           {!selectedKans && !selectedKlant && (
             <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '8px' }}>
@@ -360,7 +380,7 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
 
           {/* Loading */}
           {selectedKans && loadingCbs && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+            <div className="ts-loading-row">
               <div className="ts-spinner" />
               <span style={{ fontSize: '12px', color: S.t3 }}>CBS data laden voor <span style={{ color: S.t1, fontFamily: 'var(--font-mono)' }}>{selectedKans.postcode}</span>…</span>
             </div>
@@ -378,7 +398,7 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
                   {selectedKans.score}/100
                 </div>
                 <button onClick={() => { setSelectedKans(null); setSelectedCbs(null) }}
-                  style={{ marginLeft: 'auto', fontSize: '14px', color: S.t4, background: 'none', border: 'none', cursor: 'pointer', lineHeight: 1, padding: '2px 4px', borderRadius: '4px' }}>✕</button>
+                  className="ts-close-btn">✕</button>
               </div>
               <div ref={cbsKansRef} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '6px', flex: 1 }}>
                 {([
@@ -387,42 +407,29 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
                   { label: 'Koop',     Icon: Home,       gebied: `${Math.round(selectedCbs.pct_koop * 10) / 10}%`,      color: '#8878B8', glow: 'rgba(136,120,184,0.18)', match: Math.abs(profiel.pctKoop - selectedCbs.pct_koop) <= 10 ? 'Goed' : Math.abs(profiel.pctKoop - selectedCbs.pct_koop) <= 20 ? 'Ok' : 'Ver' },
                   { label: 'Inwoners', Icon: Building2,  gebied: (selectedKans.inwoners ?? 0) >= 1000 ? `${((selectedKans.inwoners ?? 0)/1000).toFixed(1)}K` : `${selectedKans.inwoners ?? 0}`, color: '#5888A8', glow: 'rgba(88,136,168,0.18)', match: 'Ok' as const },
                 ] as { label: string; Icon: React.ElementType; gebied: string; color: string; glow: string; match: string }[]).map(cb => (
-                  <div key={cb.label} data-cbs-card style={{
-                    background: `linear-gradient(145deg, rgba(8,16,48,0.72), rgba(4,10,32,0.58))`,
-                    backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)',
-                    borderRadius: 'var(--r-lg)',
-                    border: `1px solid rgba(255,255,255,0.06)`,
-                    borderTop: `1px solid ${cb.color}55`,
-                    padding: '14px 16px',
-                    boxShadow: `0 8px 32px rgba(0,0,40,0.45), inset 0 1px 0 rgba(255,255,255,0.04)`,
-                    display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
+                  <div key={cb.label} data-cbs-card className="ts-cbs-card" style={{ borderTop: `1px solid ${cb.color}55` }}>
+                    <div className="ts-cbs-card__header">
                       <cb.Icon size={12} color={cb.color} style={{ opacity: 0.7 }} />
-                      <div style={{ fontSize: '9px', fontWeight: 600, color: 'rgba(200,220,240,0.50)', textTransform: 'uppercase', letterSpacing: '0.14em' }}>{cb.label}</div>
+                      <div className="ts-cbs-card__label">{cb.label}</div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                       {'sub' in cb ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                           <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-                            <div style={{ fontSize: '24px', fontWeight: 300, color: 'rgba(140,170,210,0.80)', fontFamily: 'var(--font-mono)', lineHeight: 1, letterSpacing: '-0.02em' }}>{(cb as {sub: string}).sub}</div>
+                            <div className="ts-cbs-card__value" style={{ fontSize: '24px', color: 'rgba(140,170,210,0.80)' }}>{(cb as {sub: string}).sub}</div>
                             <div style={{ fontSize: '10px', color: 'rgba(200,220,240,0.45)', fontFamily: 'var(--font-mono)' }}>mannen</div>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-                            <div style={{ fontSize: '24px', fontWeight: 300, color: cb.color, fontFamily: 'var(--font-mono)', lineHeight: 1, letterSpacing: '-0.02em', textShadow: `0 0 24px ${cb.glow}` }}>{cb.gebied}</div>
+                            <div className="ts-cbs-card__value" style={{ fontSize: '24px', color: cb.color, textShadow: `0 0 24px ${cb.glow}` }}>{cb.gebied}</div>
                             <div style={{ fontSize: '10px', color: 'rgba(200,220,240,0.45)', fontFamily: 'var(--font-mono)' }}>vrouwen</div>
                           </div>
                         </div>
                       ) : (
-                        <div style={{ fontSize: '30px', fontWeight: 300, color: cb.color, fontFamily: 'var(--font-mono)', lineHeight: 1, letterSpacing: '-0.02em', textShadow: `0 0 24px ${cb.glow}` }}>{cb.gebied}</div>
+                        <div className="ts-cbs-card__value" style={{ fontSize: '30px', color: cb.color, textShadow: `0 0 24px ${cb.glow}` }}>{cb.gebied}</div>
                       )}
-                      <div style={{
-                        padding: '3px 9px', borderRadius: '3px', fontSize: '9px', fontWeight: 600, whiteSpace: 'nowrap', alignSelf: 'flex-start',
-                        letterSpacing: '0.06em', textTransform: 'uppercase',
-                        background: cb.match === 'Goed' ? 'rgba(60,140,80,0.14)' : cb.match === 'Ok' ? 'rgba(180,140,60,0.14)' : 'rgba(180,70,60,0.14)',
-                        color: cb.match === 'Goed' ? '#74C490' : cb.match === 'Ok' ? '#C0A060' : '#C07068',
-                        border: `1px solid ${cb.match === 'Goed' ? 'rgba(60,140,80,0.25)' : cb.match === 'Ok' ? 'rgba(180,140,60,0.25)' : 'rgba(180,70,60,0.25)'}`,
-                      }}>{cb.match === 'Goed' ? '✓ Goed' : cb.match === 'Ok' ? '~ Ok' : '✗ Ver'}</div>
+                      <div className={`ts-match-badge ts-match-badge--${cb.match === 'Goed' ? 'good' : cb.match === 'Ok' ? 'ok' : 'far'}`}>
+                        {cb.match === 'Goed' ? '✓ Goed' : cb.match === 'Ok' ? '~ Ok' : '✗ Ver'}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -435,8 +442,7 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
                 <div style={{ background: S.bg3, borderRadius: 'var(--r-sm)', padding: '3px 10px', fontSize: '13px', fontWeight: 700, color: S.t1, border: `1px solid ${S.bdr2}`, fontFamily: 'var(--font-mono)' }}>{selectedKans.postcode}</div>
-                <button onClick={() => { setSelectedKans(null); setSelectedCbs(null) }}
-                  style={{ marginLeft: 'auto', fontSize: '14px', color: S.t4, background: 'none', border: 'none', cursor: 'pointer' }}>✕</button>
+                <button onClick={() => { setSelectedKans(null); setSelectedCbs(null) }} className="ts-close-btn">✕</button>
               </div>
               <p style={{ fontSize: '11px', color: S.t2 }}>Geen CBS-data voor <strong style={{ color: S.t1, fontFamily: 'var(--font-mono)' }}>{selectedKans.postcode}</strong>.</p>
             </div>
@@ -444,7 +450,7 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
 
           {/* Klant loading */}
           {selectedKlant && loadingKlantCbs && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+            <div className="ts-loading-row">
               <div className="ts-spinner" />
               <span style={{ fontSize: '12px', color: S.t3 }}>CBS data laden voor <span style={{ color: 'var(--accent-2)', fontFamily: 'var(--font-mono)' }}>{selectedKlant.postcode}</span>…</span>
             </div>
@@ -462,51 +468,38 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
                   {selectedKlant.klant_count} klanten{(selectedKlant.inwoners ?? 0) > 0 ? ` · ${((selectedKlant.klant_count / selectedKlant.inwoners!) * 100).toFixed(1)}% pen.` : ''}
                 </div>
                 <button onClick={() => { setSelectedKlant(null); setSelectedKlantCbs(null) }}
-                  style={{ marginLeft: 'auto', fontSize: '14px', color: S.t4, background: 'none', border: 'none', cursor: 'pointer', lineHeight: 1, padding: '2px 4px', borderRadius: '4px' }}>✕</button>
+                  className="ts-close-btn">✕</button>
               </div>
               <div ref={cbsKlantRef} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '6px', flex: 1 }}>
                 {([
-                  { label: 'Leeftijd', Icon: Users,      gebied: `${Math.round(selectedKlantCbs.cbs_leeftijd * 10) / 10}jr`, color: '#C2A46A', glow: 'rgba(194,164,106,0.18)', match: Math.abs(profiel.leeftijd - selectedKlantCbs.cbs_leeftijd) <= 5 ? 'Goed' : Math.abs(profiel.leeftijd - selectedKlantCbs.cbs_leeftijd) <= 10 ? 'Ok' : 'Ver' },
+                  { label: 'Leeftijd', Icon: Users,      gebied: `${Math.round(selectedKlantCbs.cbs_leeftijd * 10) / 10}jr`,  color: '#C2A46A', glow: 'rgba(194,164,106,0.18)', match: Math.abs(profiel.leeftijd - selectedKlantCbs.cbs_leeftijd) <= 5 ? 'Goed' : Math.abs(profiel.leeftijd - selectedKlantCbs.cbs_leeftijd) <= 10 ? 'Ok' : 'Ver' },
                   { label: 'Vrouwen',  Icon: TrendingUp, gebied: `${Math.round(selectedKlantCbs.pct_vrouw * 10) / 10}%`, sub: `${Math.round((100 - selectedKlantCbs.pct_vrouw) * 10) / 10}%`, color: '#B87888', glow: 'rgba(184,120,136,0.18)', match: Math.abs(profiel.pctVrouw - selectedKlantCbs.pct_vrouw) <= 5 ? 'Goed' : Math.abs(profiel.pctVrouw - selectedKlantCbs.pct_vrouw) <= 10 ? 'Ok' : 'Ver' },
                   { label: 'Koop',     Icon: Home,       gebied: `${Math.round(selectedKlantCbs.pct_koop * 10) / 10}%`,      color: '#8878B8', glow: 'rgba(136,120,184,0.18)', match: Math.abs(profiel.pctKoop - selectedKlantCbs.pct_koop) <= 10 ? 'Goed' : Math.abs(profiel.pctKoop - selectedKlantCbs.pct_koop) <= 20 ? 'Ok' : 'Ver' },
                   { label: 'Inwoners', Icon: Building2,  gebied: (selectedKlant.inwoners ?? 0) >= 1000 ? `${((selectedKlant.inwoners ?? 0)/1000).toFixed(1)}K` : `${selectedKlant.inwoners ?? 0}`, color: '#5888A8', glow: 'rgba(88,136,168,0.18)', match: 'Ok' as const },
                 ] as { label: string; Icon: React.ElementType; gebied: string; color: string; glow: string; match: string }[]).map(cb => (
-                  <div key={cb.label} data-cbs-card style={{
-                    background: `linear-gradient(145deg, rgba(8,16,48,0.72), rgba(4,10,32,0.58))`,
-                    backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)',
-                    borderRadius: 'var(--r-lg)',
-                    border: `1px solid rgba(255,255,255,0.06)`,
-                    borderTop: `1px solid ${cb.color}55`,
-                    padding: '14px 16px',
-                    boxShadow: `0 8px 32px rgba(0,0,40,0.45), inset 0 1px 0 rgba(255,255,255,0.04)`,
-                    display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
+                  <div key={cb.label} data-cbs-card className="ts-cbs-card" style={{ borderTop: `1px solid ${cb.color}55` }}>
+                    <div className="ts-cbs-card__header">
                       <cb.Icon size={12} color={cb.color} style={{ opacity: 0.7 }} />
-                      <div style={{ fontSize: '9px', fontWeight: 600, color: 'rgba(200,220,240,0.50)', textTransform: 'uppercase', letterSpacing: '0.14em' }}>{cb.label}</div>
+                      <div className="ts-cbs-card__label">{cb.label}</div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                       {'sub' in cb ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                           <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-                            <div style={{ fontSize: '24px', fontWeight: 300, color: 'rgba(140,170,210,0.80)', fontFamily: 'var(--font-mono)', lineHeight: 1, letterSpacing: '-0.02em' }}>{(cb as {sub: string}).sub}</div>
+                            <div className="ts-cbs-card__value" style={{ fontSize: '24px', color: 'rgba(140,170,210,0.80)' }}>{(cb as {sub: string}).sub}</div>
                             <div style={{ fontSize: '10px', color: 'rgba(200,220,240,0.45)', fontFamily: 'var(--font-mono)' }}>mannen</div>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-                            <div style={{ fontSize: '24px', fontWeight: 300, color: cb.color, fontFamily: 'var(--font-mono)', lineHeight: 1, letterSpacing: '-0.02em', textShadow: `0 0 24px ${cb.glow}` }}>{cb.gebied}</div>
+                            <div className="ts-cbs-card__value" style={{ fontSize: '24px', color: cb.color, textShadow: `0 0 24px ${cb.glow}` }}>{cb.gebied}</div>
                             <div style={{ fontSize: '10px', color: 'rgba(200,220,240,0.45)', fontFamily: 'var(--font-mono)' }}>vrouwen</div>
                           </div>
                         </div>
                       ) : (
-                        <div style={{ fontSize: '30px', fontWeight: 300, color: cb.color, fontFamily: 'var(--font-mono)', lineHeight: 1, letterSpacing: '-0.02em', textShadow: `0 0 24px ${cb.glow}` }}>{cb.gebied}</div>
+                        <div className="ts-cbs-card__value" style={{ fontSize: '30px', color: cb.color, textShadow: `0 0 24px ${cb.glow}` }}>{cb.gebied}</div>
                       )}
-                      <div style={{
-                        padding: '3px 9px', borderRadius: '3px', fontSize: '9px', fontWeight: 600, whiteSpace: 'nowrap', alignSelf: 'flex-start',
-                        letterSpacing: '0.06em', textTransform: 'uppercase',
-                        background: cb.match === 'Goed' ? 'rgba(60,140,80,0.14)' : cb.match === 'Ok' ? 'rgba(180,140,60,0.14)' : 'rgba(180,70,60,0.14)',
-                        color: cb.match === 'Goed' ? '#74C490' : cb.match === 'Ok' ? '#C0A060' : '#C07068',
-                        border: `1px solid ${cb.match === 'Goed' ? 'rgba(60,140,80,0.25)' : cb.match === 'Ok' ? 'rgba(180,140,60,0.25)' : 'rgba(180,70,60,0.25)'}`,
-                      }}>{cb.match === 'Goed' ? '✓ Goed' : cb.match === 'Ok' ? '~ Ok' : '✗ Ver'}</div>
+                      <div className={`ts-match-badge ts-match-badge--${cb.match === 'Goed' ? 'good' : cb.match === 'Ok' ? 'ok' : 'far'}`}>
+                        {cb.match === 'Goed' ? '✓ Goed' : cb.match === 'Ok' ? '~ Ok' : '✗ Ver'}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -519,8 +512,7 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
                 <div style={{ background: 'rgba(103,191,218,0.10)', border: '1px solid rgba(103,191,218,0.28)', borderRadius: 'var(--r-sm)', padding: '3px 10px', fontSize: '13px', fontWeight: 700, color: 'var(--accent-2)', fontFamily: 'var(--font-mono)' }}>{selectedKlant.postcode}</div>
-                <button onClick={() => { setSelectedKlant(null); setSelectedKlantCbs(null) }}
-                  style={{ marginLeft: 'auto', fontSize: '14px', color: S.t4, background: 'none', border: 'none', cursor: 'pointer' }}>✕</button>
+                <button onClick={() => { setSelectedKlant(null); setSelectedKlantCbs(null) }} className="ts-close-btn">✕</button>
               </div>
               <p style={{ fontSize: '11px', color: S.t2 }}>Geen CBS-data voor <strong style={{ color: 'var(--accent-2)', fontFamily: 'var(--font-mono)' }}>{selectedKlant.postcode}</strong>.</p>
             </div>
@@ -529,56 +521,34 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
       </div>
 
       {/* ══ TAB BAR ══ */}
-      {(() => {
-        const topKlant = klantGebieden[0]
-        const topStad  = topKlant ? getStad(topKlant.postcode) : null
-        return (
-          <div style={{
-            height: '56px', flexShrink: 0,
-            display: 'flex', alignItems: 'stretch', justifyContent: 'space-between',
-            borderBottom: `1px solid ${S.bdr}`,
-            background: S.bg1,
-          }}>
-            <div style={{ display: 'flex', width: '100%' }}>
-              {([
-                { id: 'kaart',     label: 'Kaart',    Icon: MapIcon,     accent: 'var(--accent)' },
-                { id: 'postcodes', label: 'Kansen',   Icon: LayoutList,  accent: 'var(--accent)' },
-                { id: 'klanten',   label: 'Klanten',  Icon: Users,       accent: 'var(--accent-2)' },
-              ] as { id: 'kaart'|'postcodes'|'klanten'; label: string; Icon: React.ElementType; accent: string }[]).map(({ id, label, Icon, accent }) => {
-                const isActive = viewTab === id
-                return (
-                  <button key={id} onClick={() => setViewTab(id)} aria-label={`Tab: ${label}`} aria-pressed={isActive} style={{
-                    flex: 1,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                    padding: '0 24px', fontSize: '13px', fontWeight: 700,
-                    border: 'none', cursor: 'pointer',
-                    letterSpacing: '0.08em', textTransform: 'uppercase',
-                    background: isActive ? 'rgba(255,255,255,0.04)' : 'transparent',
-                    color: isActive ? S.t1 : S.t4,
-                    fontFamily: 'var(--font)',
-                    borderBottom: isActive ? `3px solid ${accent}` : '3px solid transparent',
-                    transition: 'color 0.12s, border-color 0.12s, background 0.12s',
-                    marginBottom: '-1px',
-                  }}>
-                    <Icon size={14} color={isActive ? accent : 'var(--t-4)'} />
-                    {label}
-                    {id === 'postcodes' && (
-                      <span style={{ fontSize: '11px', fontWeight: 700, background: 'var(--accent-bg)', color: 'var(--accent)', borderRadius: '4px', padding: '2px 7px', marginLeft: '2px', fontFamily: 'var(--font-mono)' }}>
-                        {topKansen.length}
-                      </span>
-                    )}
-                    {id === 'klanten' && klantGebieden.length > 0 && (
-                      <span style={{ fontSize: '11px', fontWeight: 700, background: 'rgba(103,191,218,0.10)', color: 'var(--accent-2)', borderRadius: '4px', padding: '2px 7px', marginLeft: '2px', fontFamily: 'var(--font-mono)' }}>
-                        {klantGebieden.length}
-                      </span>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        )
-      })()}
+      <div className="ts-tab-bar" ref={tabBarRef} style={{ position: 'relative' }}>
+        {/* Spell: sliding indicator */}
+        <div ref={tabIndicatorRef} className="ts-tab-indicator"
+          style={{ background: 'var(--accent)', transform: 'translateX(0)' }} />
+
+        {([
+          { id: 'kaart',     label: 'Kaart',   Icon: MapIcon,    accent: 'var(--accent)' },
+          { id: 'postcodes', label: 'Kansen',  Icon: LayoutList, accent: 'var(--accent)' },
+          { id: 'klanten',   label: 'Klanten', Icon: Users,      accent: 'var(--accent-2)' },
+        ] as { id: 'kaart'|'postcodes'|'klanten'; label: string; Icon: React.ElementType; accent: string }[]).map(({ id, label, Icon, accent }) => {
+          const isActive = viewTab === id
+          return (
+            <button key={id} onClick={() => setViewTab(id)}
+              aria-label={`Tab: ${label}`} aria-pressed={isActive}
+              className={isActive ? 'ts-tab-btn active' : 'ts-tab-btn'}
+              style={{ borderBottom: 'none' }}>
+              <Icon size={14} color={isActive ? accent : 'var(--t-4)'} />
+              {label}
+              {id === 'postcodes' && (
+                <span className="ts-tab-badge ts-tab-badge--amber">{topKansen.length}</span>
+              )}
+              {id === 'klanten' && klantGebieden.length > 0 && (
+                <span className="ts-tab-badge ts-tab-badge--cyan">{klantGebieden.length}</span>
+              )}
+            </button>
+          )
+        })}
+      </div>
 
       {/* ══ GEM. KLANTPROFIEL STRIP ══ */}
       {(() => {
@@ -586,13 +556,7 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
         const refStad = refPc ? getStad(refPc) : null
         const mannen = 100 - profiel.pctVrouw
         return (
-          <div style={{
-            flexShrink: 0,
-            display: 'flex', alignItems: 'center', gap: '6px',
-            padding: '5px 16px',
-            borderBottom: `1px solid ${S.bdr}`,
-            background: 'rgba(255,255,255,0.025)',
-          }}>
+          <div className="ts-profile-bar">
             <span style={{ fontSize: '9px', fontWeight: 700, color: S.t4, textTransform: 'uppercase', letterSpacing: '0.12em', whiteSpace: 'nowrap' }}>Gem. klantprofiel</span>
             {refPc && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: '2px' }}>
@@ -624,18 +588,18 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
 
         {/* ══ POSTCODES TAB ══ */}
         {viewTab === 'postcodes' && (
-          <div style={{ flex: 1, overflowY: 'auto', background: 'transparent', padding: '12px 12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div className="ts-tab-content">
 
             {/* Koptekst */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0, background: 'rgba(22,4,4,0.88)', borderRadius: 'var(--r-md)', padding: '9px 14px', border: '1px solid rgba(220,80,60,0.18)' }}>
               <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--accent)', opacity: 0.85, flexShrink: 0 }} />
               <span style={{ fontSize: '12px', fontWeight: 700, color: S.t1, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Kansen · CBS-profiel match</span>
-              <span style={{ fontSize: '11px', color: S.t4, fontStyle: 'italic' }}>leeftijd · %vrouw · %koop · inwoners</span>
+              <span style={{ fontSize: '11px', color: S.t3, fontStyle: 'italic' }}>leeftijd · %vrouw · %koop · inwoners</span>
               <span style={{ fontSize: '10px', fontWeight: 700, background: 'var(--accent-bg)', color: 'var(--accent)', borderRadius: '3px', padding: '2px 8px', fontFamily: 'var(--font-mono)', marginLeft: 'auto' }}>{topKansen.length} kansen</span>
             </div>
 
             {/* Table header with sort */}
-            <div style={{ display: 'grid', gridTemplateColumns: '40px 180px 180px 120px 1fr', gap: '0', alignItems: 'center', padding: '0 16px', flexShrink: 0 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '40px 180px 180px 120px 1fr', gap: '0', alignItems: 'center', padding: '7px 16px', flexShrink: 0, background: 'rgba(22,4,4,0.90)', borderRadius: 'var(--r-md)', border: '1px solid rgba(220,80,60,0.16)' }}>
               {([
                 { key: null,        label: '#' },
                 { key: 'postcode',  label: 'Postcode' },
@@ -669,18 +633,18 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
                 const nkStad       = nearestKlant ? getStad(nearestKlant.postcode) : null
                 return (
                   <div key={k.postcode}
-                    onClick={() => handleSelectKans(k)}
+                    onClick={e => { triggerRipple(e, kc + '55'); handleSelectKans(k) }}
                     style={{
                       display: 'grid', gridTemplateColumns: '40px 180px 180px 120px 1fr',
-                      alignItems: 'center', gap: '0',
-                      background: isSelected ? `${kc}18` : 'rgba(30,0,8,0.45)',
-                      border: `1px solid ${isSelected ? kc + '40' : 'rgba(220,80,60,0.12)'}`,
-                      borderLeft: `3px solid ${isSelected ? kc : 'transparent'}`,
+                      alignItems: 'center', gap: '0', position: 'relative',
+                      background: isSelected ? `rgba(60,8,8,0.88)` : 'rgba(18,6,8,0.82)',
+                      border: `1px solid ${isSelected ? kc + '55' : 'rgba(220,80,60,0.18)'}`,
+                      borderLeft: `3px solid ${isSelected ? kc : 'rgba(220,80,60,0.30)'}`,
                       borderRadius: 'var(--r-md)',
                       padding: '13px 16px',
                       cursor: 'pointer',
                       transition: 'background 0.1s, border-color 0.1s',
-                      boxShadow: isSelected ? `0 0 16px ${kc}18` : 'none',
+                      boxShadow: isSelected ? `0 2px 20px ${kc}30` : '0 1px 4px rgba(0,0,0,0.35)',
                     }}>
                     {/* Rank */}
                     <span style={{ fontSize: '12px', fontWeight: 700, color: S.t4, fontFamily: 'var(--font-mono)' }}>{i + 1}</span>
@@ -745,9 +709,10 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
 
         {/* ══ KLANTEN TAB ══ */}
         {viewTab === 'klanten' && (
-          <div style={{ flex: 1, overflowY: 'auto', background: 'transparent', padding: '12px 12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div className="ts-tab-content">
+
             {/* Koptekst + zoek */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0, background: 'rgba(4,8,22,0.88)', borderRadius: 'var(--r-md)', padding: '9px 14px', border: '1px solid rgba(82,140,212,0.18)' }}>
               <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'var(--accent-2)', opacity: 0.85, flexShrink: 0 }} />
               <span style={{ fontSize: '11px', fontWeight: 700, color: S.t1, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Klanten</span>
               <div style={{ flex: 1, position: 'relative' }}>
@@ -779,33 +744,31 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
             </div>
 
             {/* KPI cards */}
-            {klantGebieden.length > 0 && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', flexShrink: 0 }}>
-                  {[
-                    { label: 'Totaal klanten',  value: String(kpiDisplay.total),    color: '#52C4E8', glow: 'rgba(82,196,232,0.20)' },
-                    { label: 'Klantgebieden',   value: String(kpiDisplay.gebieden), color: '#4AB0D8', glow: 'rgba(74,176,216,0.18)' },
-                    { label: 'Gem. penetratie', value: `${kpiDisplay.pen}%`,        color: '#8FD44C', glow: 'rgba(143,212,76,0.18)'  },
-                  ].map(s => (
-                    <div key={s.label} style={{
-                      background: 'rgba(0,16,70,0.50)',
-                      backdropFilter: 'blur(16px)',
-                      WebkitBackdropFilter: 'blur(16px)',
-                      borderRadius: 'var(--r-md)',
-                      border: `1px solid rgba(82,180,212,0.18)`,
-                      borderTop: `2px solid ${s.color}60`,
-                      padding: '8px 12px',
-                      display: 'flex', alignItems: 'center', gap: '10px',
-                      boxShadow: `0 4px 16px rgba(0,0,60,0.30)`,
-                    }}>
-                      <div style={{ fontSize: '24px', lineHeight: 1, color: s.color, fontFamily: 'var(--font-dotmatrix)', letterSpacing: '0.04em', textShadow: `0 0 14px ${s.glow}` }}>{s.value}</div>
-                      <div style={{ fontSize: '8px', color: 'rgba(232,245,242,0.45)', textTransform: 'uppercase', letterSpacing: '0.12em', fontFamily: 'var(--font)' }}>{s.label}</div>
-                    </div>
-                  ))}
-                </div>
-            )}
+            {klantGebieden.length > 0 && (() => {
+              const kpiTotal    = klantGebieden.reduce((s, k) => s + k.klant_count, 0)
+              const kpiGebieden = klantGebieden.length
+              const validPen    = klantGebieden.filter(k => (k.inwoners ?? 0) > 0)
+              const kpiPen      = validPen.length > 0
+                ? (validPen.reduce((s, k) => s + k.klant_count / k.inwoners!, 0) / validPen.length * 100).toFixed(1)
+                : '0.0'
+              return (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', flexShrink: 0 }}>
+                {[
+                  { label: 'Totaal klanten',  value: String(kpiTotal),    color: '#52C4E8', glow: 'rgba(82,196,232,0.20)' },
+                  { label: 'Klantgebieden',   value: String(kpiGebieden), color: '#4AB0D8', glow: 'rgba(74,176,216,0.18)' },
+                  { label: 'Gem. penetratie', value: `${kpiPen}%`,        color: '#8FD44C', glow: 'rgba(143,212,76,0.18)'  },
+                ].map(s => (
+                  <div key={s.label} className="ts-kpi-stat ts-kpi-stat--blue" style={{ borderTop: `2px solid ${s.color}60` }}>
+                    <span style={{ fontSize: '24px', lineHeight: 1, color: s.color, fontFamily: 'var(--font-dotmatrix)', letterSpacing: '0.04em', textShadow: `0 0 14px ${s.glow}` }}>{s.value}</span>
+                    <div style={{ fontSize: '8px', color: 'rgba(232,245,242,0.45)', textTransform: 'uppercase', letterSpacing: '0.12em', fontFamily: 'var(--font)' }}>{s.label}</div>
+                  </div>
+                ))}
+              </div>
+              )
+            })()}
 
             {/* Table header with sort */}
-            <div style={{ display: 'grid', gridTemplateColumns: '40px 220px 130px 140px 100px 100px 100px 100px 100px', gap: '0', alignItems: 'center', padding: '0 16px', flexShrink: 0 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '40px 220px 130px 140px 100px 100px 100px 100px 100px', gap: '0', alignItems: 'center', padding: '7px 16px', flexShrink: 0, background: 'rgba(4,8,22,0.90)', borderRadius: 'var(--r-md)', border: '1px solid rgba(82,140,212,0.14)' }}>
               {([
                 { key: null,        label: '#' },
                 { key: 'postcode',  label: 'Postcode' },
@@ -847,17 +810,18 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
                 const isKlantSelected = selectedKlant?.postcode === k.postcode
                 return (
                   <div key={k.postcode}
-                    onClick={() => handleSelectKlant(k)}
+                    onClick={e => { triggerRipple(e, 'rgba(103,191,218,0.40)'); handleSelectKlant(k) }}
                     style={{
                       display: 'grid', gridTemplateColumns: '40px 220px 130px 140px 100px 100px 100px 100px 100px',
-                      alignItems: 'center', gap: '0',
-                      background: isKlantSelected ? 'rgba(0,40,120,0.45)' : 'rgba(0,12,60,0.40)',
-                      border: `1px solid ${isKlantSelected ? 'rgba(103,191,218,0.30)' : 'rgba(82,140,212,0.12)'}`,
+                      alignItems: 'center', gap: '0', position: 'relative',
+                      background: isKlantSelected ? 'rgba(0,30,80,0.92)' : 'rgba(6,10,24,0.84)',
+                      border: `1px solid ${isKlantSelected ? 'rgba(103,191,218,0.40)' : 'rgba(82,140,212,0.18)'}`,
                       borderLeft: `3px solid ${isKlantSelected ? 'var(--accent-2)' : bc}`,
                       borderRadius: 'var(--r-md)',
                       padding: '13px 16px',
                       cursor: 'pointer',
                       transition: 'background 0.1s, border-color 0.1s',
+                      boxShadow: isKlantSelected ? '0 2px 20px rgba(103,191,218,0.15)' : '0 1px 4px rgba(0,0,0,0.35)',
                     }}>
                     <span style={{ fontSize: '12px', fontWeight: 700, color: S.t4, fontFamily: 'var(--font-mono)' }}>{i + 1}</span>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', padding: '0 4px' }}>
@@ -891,43 +855,30 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
           {/* ── MAP ── */}
           <div style={{ flex: '0 0 65%', position: 'relative', overflow: 'hidden' }}>
 
-            {/* Mode toggle — dark glassmorphism */}
-            <div style={{
-              position: 'absolute', top: '12px', left: '12px', zIndex: 500,
-              display: 'flex', gap: '2px', padding: '3px',
-              background: 'rgba(7,9,15,0.85)', backdropFilter: 'blur(16px)',
-              borderRadius: 'var(--r-md)', border: `1px solid ${S.bdr2}`,
-              boxShadow: 'var(--shadow-md)',
-            }}>
+            {/* Mode toggle — Spell: sliding pill */}
+            <div className="ts-map-overlay" style={{ top: '12px', left: '12px', display: 'flex', padding: '3px', position: 'relative', overflow: 'hidden' }}>
+              {/* sliding pill background */}
+              <div ref={pillRef} className="ts-toggle-pill"
+                style={{ background: 'var(--accent-bg)', transform: 'translateX(0)' }} />
               {([
-                { id: 'kansen',  label: 'Kansen',  activeColor: 'var(--accent)', activeBg: 'var(--accent-bg)' },
-                { id: 'klanten', label: 'Klanten', activeColor: 'var(--accent-2)', activeBg: 'rgba(103,191,218,0.10)' },
-              ] as { id: HeatMode; label: string; activeColor: string; activeBg: string }[]).map(({ id, label, activeColor, activeBg }) => (
-                <button key={id} onClick={() => {
-                  setHeatMode(id)
-                  setSelectedKans(null); setSelectedCbs(null)
-                  setFlyTarget(overviewTarget)
-                }} aria-label={`Kaartmodus: ${label}`} aria-pressed={heatMode === id} style={{
-                  padding: '5px 14px', fontSize: '11px', fontWeight: 700,
-                  border: 'none', cursor: 'pointer', borderRadius: 'var(--r-sm)',
-                  background: heatMode === id ? activeBg : 'transparent',
-                  color: heatMode === id ? activeColor : S.t4,
-                  transition: 'all 0.15s ease',
-                  fontFamily: 'var(--font)',
-                  letterSpacing: '0.06em',
-                  textTransform: 'uppercase' as const,
-                  boxShadow: heatMode === id ? `0 0 10px ${activeColor}30` : 'none',
-                }}>{label}</button>
+                { id: 'kansen',  label: 'Kansen',  activeColor: 'var(--accent)' },
+                { id: 'klanten', label: 'Klanten', activeColor: 'var(--accent-2)' },
+              ] as { id: HeatMode; label: string; activeColor: string }[]).map(({ id, label, activeColor }) => (
+                <button key={id} className="ts-toggle-btn"
+                  onClick={() => {
+                    setHeatMode(id)
+                    setSelectedKans(null); setSelectedCbs(null)
+                    setFlyTarget(overviewTarget)
+                  }}
+                  aria-label={`Kaartmodus: ${label}`} aria-pressed={heatMode === id}
+                  style={{ color: heatMode === id ? activeColor : S.t4 }}>
+                  {label}
+                </button>
               ))}
             </div>
 
             {/* Legend — dark glassmorphism */}
-            <div style={{
-              position: 'absolute', bottom: '28px', left: '12px', zIndex: 500,
-              background: 'rgba(7,9,15,0.88)', backdropFilter: 'blur(16px)',
-              borderRadius: 'var(--r-md)', border: `1px solid ${S.bdr2}`,
-              boxShadow: 'var(--shadow-md)', padding: '10px 13px',
-            }}>
+            <div className="ts-map-overlay" style={{ bottom: '28px', left: '12px', padding: '10px 13px' }}>
               {heatMode === 'kansen' ? (
                 <>
                   <p className="ts-label" style={{ marginBottom: '8px' }}>Kansscore</p>
@@ -983,8 +934,8 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
 
               {heatMode === 'kansen' ? (
                 <section>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '10px' }}>
-                    <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'var(--accent)', opacity: 0.85 }} />
+                  <div className="ts-section-header">
+                    <div className="ts-dot ts-dot--amber" />
                     <span className="ts-label">Kansen · {topKansen.length} gebieden</span>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
@@ -994,16 +945,14 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
                       const stad       = getStad(k.postcode)
                       const pen        = k.inwoners > 0 ? Math.round((klantCountByPostcode.get(k.postcode) ?? 0) / k.inwoners * 100) : 0
                       return (
-                        <div key={k.postcode} onClick={() => handleSelectKans(k)} style={{
-                          background: isSelected ? `${kc}10` : S.bg2,
-                          borderRadius: 'var(--r-md)',
-                          border: `1px solid ${isSelected ? kc + '40' : S.bdr}`,
-                          borderLeft: `3px solid ${isSelected ? kc : 'transparent'}`,
-                          padding: '9px 12px',
-                          display: 'flex', alignItems: 'center', gap: '8px',
-                          cursor: 'pointer', transition: 'border-color 0.12s, background 0.12s',
-                          boxShadow: isSelected ? `0 0 12px ${kc}18` : 'none',
-                        }}>
+                        <div key={k.postcode} onClick={() => handleSelectKans(k)}
+                          className="ts-list-item"
+                          style={{
+                            background: isSelected ? `${kc}10` : undefined,
+                            border: `1px solid ${isSelected ? kc + '40' : 'var(--bdr)'}`,
+                            borderLeftColor: isSelected ? kc : 'transparent',
+                            boxShadow: isSelected ? `0 0 12px ${kc}18` : 'none',
+                          }}>
                           <span style={{ fontSize: '10px', fontWeight: 700, color: S.t4, width: '14px', textAlign: 'right', flexShrink: 0, fontFamily: 'var(--font-mono)' }}>{i+1}</span>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flexShrink: 0, minWidth: '48px' }}>
                             <span style={{ fontSize: '13px', fontWeight: 700, color: isSelected ? kc : S.t1, lineHeight: 1, fontFamily: 'var(--font-mono)' }}>{k.postcode}</span>
@@ -1041,8 +990,8 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
                     )
                   })()}
                   <section>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '10px' }}>
-                      <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'var(--accent-2)', opacity: 0.85 }} />
+                    <div className="ts-section-header">
+                      <div className="ts-dot ts-dot--cyan" />
                       <span className="ts-label">Klantgebieden</span>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
@@ -1056,12 +1005,9 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
                         return (
                           <div key={k.postcode} onClick={() => {
                             if (klantCoords) setFlyTarget({ lat: klantCoords[0], lon: klantCoords[1], zoom: 13 })
-                          }} style={{
-                            background: S.bg2, borderRadius: 'var(--r-md)',
-                            border: `1px solid ${S.bdr}`, borderLeft: `3px solid ${bc}`,
-                            padding: '9px 12px', display: 'flex', alignItems: 'center', gap: '9px',
+                          }} className="ts-list-item" style={{
+                            borderLeftColor: bc,
                             cursor: klantCoords ? 'pointer' : 'default',
-                            transition: 'background 0.12s',
                           }}>
                             <span style={{ fontSize: '10px', fontWeight: 700, color: S.t4, width: '14px', textAlign: 'right', flexShrink: 0, fontFamily: 'var(--font-mono)' }}>#{i+1}</span>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', width: '50px', flexShrink: 0 }}>
@@ -1090,9 +1036,7 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
             </div>
 
             {/* Footer */}
-            <div style={{ borderTop: `1px solid ${S.bdr}`, padding: '5px 14px', fontSize: '8px', color: S.t4, background: S.bg1, flexShrink: 0, letterSpacing: '0.12em', textTransform: 'uppercase', fontFamily: 'var(--font)' }}>
-              TwinScale · CBS · Carto + OSM
-            </div>
+            <div className="ts-footer">TwinScale · CBS · Carto + OSM</div>
           </div>
         </div>
 

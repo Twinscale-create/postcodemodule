@@ -7,6 +7,7 @@ import 'leaflet/dist/leaflet.css'
 import { Match, HeatMode, KansPunt, KlantGebied, CbsData } from '@/types'
 import { getPostcodeCoords } from '@/lib/geocode'
 import PostcodeChoro from './PostcodeChoro'
+import { animate, stagger } from 'animejs'
 
 // Fix Leaflet default icon in Next.js
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -50,12 +51,40 @@ function DataBounds({ kansen }: { kansen: KansPunt[] }) {
   return null
 }
 
+/* ─── Spell: stagger-animate SVG circles on mode switch ─── */
+function StaggerMarkers({ trigger }: { trigger: HeatMode }) {
+  const map = useMap()
+  useEffect(() => {
+    const run = () => {
+      const circles = document.querySelectorAll('.leaflet-overlay-pane circle')
+      if (!circles.length) return
+      // save radii, set to 0, then animate back
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      animate(circles as any, {
+        opacity:  [0, 1],
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        r: (el: any) => {
+          const orig = el.getAttribute('r') ?? '5'
+          el.setAttribute('r', '0')
+          return orig
+        },
+        duration: 1600,
+        easing:   'easeOutElastic(1, 0.45)',
+        delay:    stagger(22, { start: 200 }),
+      })
+    }
+    const t = setTimeout(run, 350)
+    return () => clearTimeout(t)
+  }, [trigger, map])
+  return null
+}
+
 /* ─── Fly-to controller: zooms map when a kans is selected ── */
 function FlyToController({ target }: { target: { lat: number; lon: number; zoom?: number } | null }) {
   const map = useMap()
   useEffect(() => {
     if (target && isFinite(target.lat) && isFinite(target.lon)) {
-      map.flyTo([target.lat, target.lon], target.zoom ?? 13, { animate: true, duration: 0.8 })
+      map.flyTo([target.lat, target.lon], target.zoom ?? 13, { animate: true, duration: 2.2 })
     }
   }, [target, map])
   return null
@@ -134,6 +163,7 @@ export default function MapInner({
 
       <DataBounds kansen={kansen} />
       <FlyToController target={flyTarget ?? null} />
+      <StaggerMarkers trigger={heatMode} />
 
       <PostcodeChoro
         mode={heatMode}

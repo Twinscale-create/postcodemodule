@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TwinScale — Design Elements Preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* ── Reset & Base ──────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #06060e;
+    --bg1:       #0a0a18;
+    --bg2:       #0f0f22;
+    --bg3:       #161628;
+    --border:    rgba(255,255,255,0.07);
+    --border-hi: rgba(255,255,255,0.14);
+    --accent:    #C8884A;
+    --accent2:   #52C4E8;
+    --accent3:   #8FD44C;
+    --t1:        #f0eee8;
+    --t2:        #b8b4a8;
+    --t3:        #787268;
+    --t4:        #484440;
+    --r:         10px;
+    --mono:      'DM Mono', monospace;
+    --display:   'Syne', sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--t1);
+    font-family: var(--display);
+    min-height: 100vh;
+    padding: 48px 40px 80px;
+    overflow-x: hidden;
+  }
+
+  /* ── Dot grid achtergrond ──────────────────────── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: radial-gradient(circle, rgba(255,255,255,0.055) 1px, transparent 1px);
+    background-size: 28px 28px;
+    pointer-events: none;
+    z-index: 0;
+    mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 40%, transparent 100%);
+  }
+
+  /* ── Noise overlay ─────────────────────────────── */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+    opacity: 0.028;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* ── Layout ────────────────────────────────────── */
+  .page { position: relative; z-index: 2; max-width: 1320px; margin: 0 auto; }
+
+  .page-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 64px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .page-title {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--t3);
+  }
+
+  .page-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--accent);
+    background: rgba(200,136,74,0.10);
+    border: 1px solid rgba(200,136,74,0.22);
+    border-radius: 4px;
+    padding: 3px 10px;
+    letter-spacing: 0.08em;
+  }
+
+  .section { margin-bottom: 72px; }
+
+  .section-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--t4);
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+
+  /* ══════════════════════════════════════════════════
+     1. FROSTED GLASS CARDS
+  ══════════════════════════════════════════════════ */
+  .glass-card {
+    background: rgba(15, 15, 34, 0.55);
+    backdrop-filter: blur(18px) saturate(1.4);
+    -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    border: 1px solid var(--border-hi);
+    border-radius: var(--r);
+    padding: 20px 22px;
+  }
+
+  /* ══════════════════════════════════════════════════
+     2. GRADIENT BORDER CARDS
+  ══════════════════════════════════════════════════ */
+  .grad-border-wrap {
+    border-radius: var(--r);
+    padding: 1px;
+    background: linear-gradient(135deg, rgba(200,136,74,0.55) 0%, rgba(255,255,255,0.06) 40%, rgba(82,196,232,0.35) 100%);
+  }
+  .grad-border-inner {
+    background: var(--bg2);
+    border-radius: calc(var(--r) - 1px);
+    padding: 20px 22px;
+  }
+
+  /* ══════════════════════════════════════════════════
+     3. CORNER ACCENT CARDS
+  ══════════════════════════════════════════════════ */
+  .corner-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    padding: 20px 22px;
+    position: relative;
+  }
+  .corner-card::before,
+  .corner-card::after {
+    content: '';
+    position: absolute;
+    width: 10px;
+    height: 10px;
+  }
+  .corner-card::before {
+    top: -1px; left: -1px;
+    border-top: 2px solid var(--accent);
+    border-left: 2px solid var(--accent);
+    border-radius: var(--r) 0 0 0;
+  }
+  .corner-card::after {
+    bottom: -1px; right: -1px;
+    border-bottom: 2px solid var(--accent2);
+    border-right: 2px solid var(--accent2);
+    border-radius: 0 0 var(--r) 0;
+  }
+
+  /* ══════════════════════════════════════════════════
+     4. GRADIENT TEXT KPI
+  ══════════════════════════════════════════════════ */
+  .kpi-value {
+    font-family: var(--mono);
+    font-size: 42px;
+    font-weight: 500;
+    line-height: 1;
+    background: linear-gradient(135deg, #f0d090 0%, var(--accent) 45%, #e86030 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .kpi-value--cyan {
+    background: linear-gradient(135deg, #a8ecff 0%, var(--accent2) 45%, #2d88b0 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .kpi-value--green {
+    background: linear-gradient(135deg, #c8f080 0%, var(--accent3) 50%, #5a9820 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .kpi-label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--t4);
+    margin-top: 6px;
+  }
+
+  /* ══════════════════════════════════════════════════
+     5. HIT-COUNTER KPI (verticale separators)
+  ══════════════════════════════════════════════════ */
+  .hit-counter {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    font-family: var(--mono);
+  }
+  .hit-digit {
+    font-size: 38px;
+    font-weight: 400;
+    color: var(--t1);
+    padding: 0 10px;
+    border-right: 1px solid var(--border-hi);
+    line-height: 1;
+    display: flex;
+    align-items: center;
+  }
+  .hit-digit:first-child { padding-left: 0; }
+  .hit-digit:last-child { border-right: none; }
+  .hit-digit span {
+    display: inline-block;
+    animation: digitDrop 0.5s cubic-bezier(0.34,1.56,0.64,1) both;
+  }
+  @keyframes digitDrop {
+    from { transform: translateY(-14px) scaleY(0.6); opacity: 0; }
+    to   { transform: translateY(0) scaleY(1); opacity: 1; }
+  }
+
+  /* ══════════════════════════════════════════════════
+     6. GLOW STATUS DOTS
+  ══════════════════════════════════════════════════ */
+  .status-row {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .status-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--t2);
+  }
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    position: relative;
+  }
+  .dot::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  .dot--green  { background: #4ade80; }
+  .dot--green::after  { background: radial-gradient(circle, rgba(74,222,128,0.4) 0%, transparent 70%); }
+  .dot--amber  { background: var(--accent); }
+  .dot--amber::after  { background: radial-gradient(circle, rgba(200,136,74,0.5) 0%, transparent 70%); animation-delay: 0.8s; }
+  .dot--cyan   { background: var(--accent2); }
+  .dot--cyan::after   { background: radial-gradient(circle, rgba(82,196,232,0.4) 0%, transparent 70%); animation-delay: 1.6s; }
+  .dot--red    { background: #f87171; }
+  .dot--red::after    { background: radial-gradient(circle, rgba(248,113,113,0.4) 0%, transparent 70%); animation-delay: 0.4s; }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 0.7; }
+    50% { transform: scale(2.2); opacity: 0; }
+  }
+
+  /* ══════════════════════════════════════════════════
+     7. TRON DIVIDER
+  ══════════════════════════════════════════════════ */
+  .tron-divider {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 24px 0;
+  }
+  .tron-line {
+    height: 1px;
+    border-radius: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent2), transparent);
+  }
+  .tron-line:nth-child(1) { opacity: 1.0; }
+  .tron-line:nth-child(2) { opacity: 0.45; margin: 0 8%; }
+  .tron-line:nth-child(3) { opacity: 0.15; margin: 0 18%; }
+
+  /* ══════════════════════════════════════════════════
+     8. ANIMATED DOT MATRIX
+  ══════════════════════════════════════════════════ */
+  .dot-matrix {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 10px;
+    padding: 20px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+  }
+  .dot-matrix-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--accent);
+    margin: auto;
+    animation: dotWave 2.8s ease-in-out infinite;
+  }
+  @keyframes dotWave {
+    0%, 100% { opacity: 0.12; transform: scale(0.6); }
+    50%       { opacity: 0.85; transform: scale(1.3); }
+  }
+
+  /* ══════════════════════════════════════════════════
+     9. DATA TICKER / MARQUEE
+  ══════════════════════════════════════════════════ */
+  .ticker-wrap {
+    overflow: hidden;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 0;
+    background: rgba(10,10,24,0.6);
+    mask-image: linear-gradient(90deg, transparent, black 8%, black 92%, transparent);
+  }
+  .ticker-track {
+    display: flex;
+    gap: 0;
+    white-space: nowrap;
+    animation: ticker 32s linear infinite;
+    width: max-content;
+  }
+  .ticker-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 28px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--t3);
+    border-right: 1px solid var(--border);
+  }
+  .ticker-item .pc { color: var(--t1); font-weight: 500; }
+  .ticker-item .sc { color: var(--accent); }
+  .ticker-sep { color: var(--border); }
+  @keyframes ticker {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+  }
+
+  /* ══════════════════════════════════════════════════
+     10. COMMAND BAR
+  ══════════════════════════════════════════════════ */
+  .cmd-bar {
+    background: rgba(12,12,28,0.95);
+    backdrop-filter: blur(24px);
+    border: 1px solid var(--border-hi);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04);
+  }
+  .cmd-input-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .cmd-icon { color: var(--t4); flex-shrink: 0; }
+  .cmd-input {
+    flex: 1;
+    background: none;
+    border: none;
+    outline: none;
+    font-family: var(--display);
+    font-size: 14px;
+    color: var(--t1);
+    caret-color: var(--accent2);
+  }
+  .cmd-input::placeholder { color: var(--t4); }
+  .cmd-hint {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--t4);
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 7px;
+  }
+  .cmd-results { padding: 8px; }
+  .cmd-result {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .cmd-result:hover, .cmd-result.active { background: rgba(255,255,255,0.05); }
+  .cmd-result.active { background: rgba(82,196,232,0.08); }
+  .cmd-result-icon {
+    width: 30px; height: 30px;
+    border-radius: 6px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--accent2);
+    flex-shrink: 0;
+  }
+  .cmd-result-text { flex: 1; }
+  .cmd-result-title { font-size: 13px; color: var(--t1); }
+  .cmd-result-sub { font-size: 11px; color: var(--t3); margin-top: 2px; font-family: var(--mono); }
+  .cmd-result-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(143,212,76,0.12);
+    color: var(--accent3);
+    border: 1px solid rgba(143,212,76,0.20);
+  }
+
+  /* ══════════════════════════════════════════════════
+     11. INSIGHT STRIP (full width)
+  ══════════════════════════════════════════════════ */
+  .insight-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .insight-cell {
+    background: var(--bg1);
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    position: relative;
+    overflow: hidden;
+    transition: background 0.15s;
+  }
+  .insight-cell::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--cell-accent, var(--accent));
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+  }
+  .insight-cell:hover { background: var(--bg2); }
+  .insight-cell:hover::before { transform: scaleX(1); }
+  .insight-cell-label { font-size: 9px; letter-spacing: 0.15em; text-transform: uppercase; color: var(--t4); font-weight: 700; }
+  .insight-cell-value { font-family: var(--mono); font-size: 28px; font-weight: 400; line-height: 1; }
+  .insight-cell-sub { font-size: 10px; color: var(--t3); font-family: var(--mono); }
+
+  /* ── Row bar ─── */
+  .row-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg2);
+    transition: border-color 0.15s, background 0.15s;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+  }
+  .row-item::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--row-accent, var(--accent));
+    border-radius: 2px 0 0 2px;
+  }
+  .row-item:hover { border-color: var(--border-hi); background: rgba(255,255,255,0.03); }
+
+  /* ── Score bar ── */
+  .score-bar-wrap { flex: 1; height: 3px; background: var(--bg3); border-radius: 2px; overflow: hidden; }
+  .score-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--bar-start, var(--accent)), var(--bar-end, #e87030));
+    animation: barGrow 1s cubic-bezier(0.34,1.2,0.64,1) both;
+  }
+  @keyframes barGrow {
+    from { width: 0 !important; }
+    to   { /* width set inline */ }
+  }
+
+  /* ── Misc ─── */
+  .card-title { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--t3); margin-bottom: 16px; font-weight: 700; }
+  .mono { font-family: var(--mono); }
+  .small { font-size: 11px; color: var(--t3); }
+
+  .tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid;
+  }
+  .tag--amber { color: var(--accent);  background: rgba(200,136,74,0.10); border-color: rgba(200,136,74,0.22); }
+  .tag--cyan  { color: var(--accent2); background: rgba(82,196,232,0.10); border-color: rgba(82,196,232,0.22); }
+  .tag--green { color: var(--accent3); background: rgba(143,212,76,0.10); border-color: rgba(143,212,76,0.22); }
+
+  /* scroll-in animaties */
+  .reveal {
+    opacity: 0;
+    transform: translateY(18px);
+    animation: revealUp 0.55s cubic-bezier(0.4,0,0.2,1) forwards;
+  }
+  @keyframes revealUp {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="page-header">
+    <div>
+      <svg width="22" height="22" viewBox="24 21 99 98" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path fill="#C8884A" d="M118.3,21.9c.2,1.4,2.1,3.2,2.4,4.4s0,.4-.2.6c-.4.4-4,2.3-4.9,2.7-3.8,1.9-8.1,3.6-12.1,5s-4.2,1.1-4.3,1.5v68.4c0,.2,0,.5.2.7.4.3,3.4.9,4.1,1.2,4,1.4,8.3,3.1,12.1,5s4.5,2.3,4.9,2.7.3.3.2.6c-.3,1.2-2.2,3-2.4,4.4-3.6-1.7-7.1-3.7-10.9-5.2-21.9-9-46.3-9-68.2,0-3.7,1.5-7.2,3.5-10.9,5.2-.2-1.4-2.1-3.2-2.4-4.4s0-.5.2-.6c5.3-3,10.9-5.5,16.6-7.5s4.1-1.1,4.4-1.3.2-.4.2-.7V36s-.4-.3-.4-.3c-7.3-2-14.3-5.1-20.9-8.8-.2-.2-.3-.3-.2-.6.3-1.2,2.2-3,2.4-4.4,3.6,1.7,7.1,3.7,10.9,5.2,21.9,9,46.3,9,68.2,0s7.2-3.5,10.9-5.2ZM93.7,37.2c-13.3,3-27.4,3-40.7,0v66.4c13.4-3,27.4-3,40.7,0V37.2Z"/>
+        <path fill="#C8884A" d="M121.8,115.4c-1.4.2-3.2,2.1-4.4,2.4s-.4,0-.6-.2c-.4-.4-2.3-4-2.7-4.9-1.9-3.8-3.6-8.1-5-12.1s-1.1-4.2-1.5-4.3H39.3c-.2,0-.5,0-.7.2-.3.4-.9,3.4-1.2,4.1-1.4,4-3.1,8.3-5,12.1s-2.3,4.5-2.7,4.9-.3.3-.6.2c-1.2-.3-3-2.2-4.4-2.4,1.7-3.6,3.7-7.1,5.2-10.9,9-21.9,9-46.3,0-68.2s-3.5-7.2-5.2-10.9c1.4-.2,3.2-2.1,4.4-2.4s.5,0,.6.2c3,5.3,5.5,10.9,7.5,16.6s1.1,4.1,1.3,4.4.4.2.7.2h68.4s.3-.4.3-.4c2-7.3,5.1-14.3,8.8-20.9.2-.2.3-.3.6-.2,1.2.3,3,2.2,4.4,2.4-1.7,3.6-3.7,7.1-5.2,10.9-9,21.9-9,46.3,0,68.2,1.5,3.7,3.5,7.2,5.2,10.9ZM106.6,90.8c-3-13.3-3-27.4,0-40.7H40.1c3,13.4,3,27.4,0,40.7h66.4Z"/>
+      </svg>
+    </div>
+    <span class="page-title">TwinScale — Design Elements Preview</span>
+    <span class="page-badge">dark.design inspired</span>
+  </div>
+
+  <!-- ──────────────────────────────────────────────
+       INSIGHT STRIP
+  ────────────────────────────────────────────────── -->
+  <div class="section reveal" style="animation-delay:0.05s">
+    <div class="section-label">KPI Strip — hover voor accent lijn</div>
+    <div class="insight-strip">
+      <div class="insight-cell" style="--cell-accent: var(--accent)">
+        <div class="insight-cell-label">Jaaromzet</div>
+        <div class="insight-cell-value" style="color: var(--accent)">€ 5.0M</div>
+        <div class="insight-cell-sub">+12% YoY</div>
+      </div>
+      <div class="insight-cell" style="--cell-accent: var(--accent2)">
+        <div class="insight-cell-label">Unieke klanten</div>
+        <div class="insight-cell-value" style="color: var(--accent2)">11.111</div>
+        <div class="insight-cell-sub">3 bezoeken / jaar</div>
+      </div>
+      <div class="insight-cell" style="--cell-accent: var(--accent3)">
+        <div class="insight-cell-label">Penetratie</div>
+        <div class="insight-cell-value" style="color: var(--accent3)">3.8%</div>
+        <div class="insight-cell-sub">295K doelgroep</div>
+      </div>
+      <div class="insight-cell" style="--cell-accent: #a78bfa">
+        <div class="insight-cell-label">Gem. bonbedrag</div>
+        <div class="insight-cell-value" style="color: #a78bfa">€ 150</div>
+        <div class="insight-cell-sub">33.333 transacties</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ──────────────────────────────────────────────
+       TICKER
+  ────────────────────────────────────────────────── -->
+  <div class="section reveal" style="animation-delay:0.1s">
+    <div class="section-label">Data Ticker — scrollende kansen feed</div>
+    <div class="ticker-wrap">
+      <div class="ticker-track" id="ticker">
+        <!-- populated by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ──────────────────────────────────────────────
+       CARD STIJLEN
+  ────────────────────────────────────────────────── -->
+  <div class="section reveal" style="animation-delay:0.15s">
+    <div class="section-label">Card stijlen</div>
+    <div class="grid3">
+
+      <!-- Frosted glass -->
+      <div class="glass-card">
+        <div class="card-title">Frosted glass</div>
+        <div class="tag tag--amber" style="margin-bottom:14px">backdrop-filter blur</div>
+        <p class="small" style="line-height:1.7">Semi-transparant panel met blur. De gradient shader achter het card is zichtbaar als zachte kleur door het glas.</p>
+        <div class="tron-divider" style="margin:18px 0 14px">
+          <div class="tron-line"></div>
+          <div class="tron-line"></div>
+          <div class="tron-line"></div>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center">
+          <div class="dot dot--cyan"></div>
+          <span class="small mono">gradient doorgeschemerd</span>
+        </div>
+      </div>
+
+      <!-- Gradient border -->
+      <div class="grad-border-wrap">
+        <div class="grad-border-inner">
+          <div class="card-title">Gradient border</div>
+          <div class="tag tag--cyan" style="margin-bottom:14px">amber → cyan</div>
+          <p class="small" style="line-height:1.7">1px gradient rand — amber linksbovenin naar cyan rechtsonderin. Premium finish zonder extra elementen.</p>
+          <div class="tron-divider" style="margin:18px 0 14px">
+            <div class="tron-line" style="background: linear-gradient(90deg, transparent, var(--accent), transparent)"></div>
+            <div class="tron-line" style="background: linear-gradient(90deg, transparent, var(--accent), transparent)"></div>
+            <div class="tron-line" style="background: linear-gradient(90deg, transparent, var(--accent), transparent)"></div>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center">
+            <div class="dot dot--amber"></div>
+            <span class="small mono">gradient border-image</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Corner accents -->
+      <div class="corner-card">
+        <div class="card-title">Corner accents</div>
+        <div class="tag tag--green" style="margin-bottom:14px">L-hoeklijnen</div>
+        <p class="small" style="line-height:1.7">Kleine L-vormige hoekaccenten — amber linksboven, cyan rechtsonder. Geeft een precision-instrument gevoel aan data cards.</p>
+        <div class="tron-divider" style="margin:18px 0 14px">
+          <div class="tron-line" style="background: linear-gradient(90deg, transparent, var(--accent3), transparent)"></div>
+          <div class="tron-line" style="background: linear-gradient(90deg, transparent, var(--accent3), transparent)"></div>
+          <div class="tron-line" style="background: linear-gradient(90deg, transparent, var(--accent3), transparent)"></div>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center">
+          <div class="dot dot--green"></div>
+          <span class="small mono">::before + ::after pseudo</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ──────────────────────────────────────────────
+       KPI STIJLEN
+  ────────────────────────────────────────────────── -->
+  <div class="section reveal" style="animation-delay:0.2s">
+    <div class="section-label">KPI weergave stijlen</div>
+    <div class="grid2">
+
+      <!-- Gradient text KPI's -->
+      <div class="glass-card">
+        <div class="card-title">Gradient tekst KPI's</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:20px; margin-top:8px">
+          <div>
+            <div class="kpi-value">11.111</div>
+            <div class="kpi-label">Klanten</div>
+          </div>
+          <div>
+            <div class="kpi-value kpi-value--cyan">63</div>
+            <div class="kpi-label">Gebieden</div>
+          </div>
+          <div>
+            <div class="kpi-value kpi-value--green">3.8%</div>
+            <div class="kpi-label">Penetratie</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hit counter -->
+      <div class="glass-card">
+        <div class="card-title">Hit-counter stijl — digit separators</div>
+        <div style="margin-top: 8px">
+          <div class="hit-counter" id="hitCounter">
+            <!-- populated by JS -->
+          </div>
+          <div class="kpi-label" style="margin-top:10px; padding-left:10px">Totaal transacties / jaar</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ──────────────────────────────────────────────
+       STATUS DOTS + DOT MATRIX
+  ────────────────────────────────────────────────── -->
+  <div class="section reveal" style="animation-delay:0.25s">
+    <div class="section-label">Status indicators + Dot matrix achtergrond</div>
+    <div class="grid2">
+
+      <div class="glass-card">
+        <div class="card-title">Glow status dots</div>
+        <div class="status-row">
+          <div class="status-item"><div class="dot dot--green"></div> Verzorgingsgebied actief — Geldermalsen 30 min</div>
+          <div class="status-item"><div class="dot dot--cyan"></div> Klantdata gesynchroniseerd — 11.111 records</div>
+          <div class="status-item"><div class="dot dot--amber"></div> CBS koppeling — 63 postcodes verrijkt</div>
+          <div class="status-item"><div class="dot dot--red"></div> 4 postcodes buiten bereik</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card-title" style="margin-bottom:12px">Dot matrix — Linear stijl golf-animatie</div>
+        <div class="dot-matrix" id="dotMatrix"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ──────────────────────────────────────────────
+       KANSEN LIJST RIJEN
+  ────────────────────────────────────────────────── -->
+  <div class="section reveal" style="animation-delay:0.3s">
+    <div class="section-label">Kansen rijen — gradient border + score bar</div>
+    <div style="display:flex; flex-direction:column; gap:6px">
+
+      <div class="row-item" style="--row-accent: #e87030">
+        <span class="mono" style="font-size:18px; color:var(--t1); min-width:52px">5443</span>
+        <span class="small" style="min-width:80px">Laarbeek</span>
+        <div class="score-bar-wrap"><div class="score-bar-fill" style="width:100%; --bar-start:#e87030; --bar-end:#c84020; animation-delay:0.05s"></div></div>
+        <span class="mono" style="font-size:12px; color:var(--accent)">100</span>
+        <span class="tag tag--amber">Top kans</span>
+      </div>
+
+      <div class="row-item" style="--row-accent: #d06828">
+        <span class="mono" style="font-size:18px; color:var(--t1); min-width:52px">8111</span>
+        <span class="small" style="min-width:80px">Raalte</span>
+        <div class="score-bar-wrap"><div class="score-bar-fill" style="width:100%; --bar-start:#d06828; --bar-end:#b83818; animation-delay:0.1s"></div></div>
+        <span class="mono" style="font-size:12px; color:var(--accent)">100</span>
+        <span class="tag tag--amber">Top kans</span>
+      </div>
+
+      <div class="row-item" style="--row-accent: #b85820">
+        <span class="mono" style="font-size:18px; color:var(--t1); min-width:52px">6511</span>
+        <span class="small" style="min-width:80px">Nijmegen</span>
+        <div class="score-bar-wrap"><div class="score-bar-fill" style="width:91%; --bar-start:#b85820; --bar-end:#9a4010; animation-delay:0.15s"></div></div>
+        <span class="mono" style="font-size:12px; color:var(--t2)">91</span>
+        <span class="tag tag--cyan">138 klanten</span>
+      </div>
+
+      <div class="row-item" style="--row-accent: #7888c8">
+        <span class="mono" style="font-size:18px; color:var(--t1); min-width:52px">4001</span>
+        <span class="small" style="min-width:80px">Tiel</span>
+        <div class="score-bar-wrap"><div class="score-bar-fill" style="width:78%; --bar-start:#7888c8; --bar-end:var(--accent2); animation-delay:0.2s"></div></div>
+        <span class="mono" style="font-size:12px; color:var(--t2)">78</span>
+        <span class="tag tag--cyan">219 klanten</span>
+      </div>
+
+      <div class="row-item" style="--row-accent: var(--accent3)">
+        <span class="mono" style="font-size:18px; color:var(--t1); min-width:52px">5011</span>
+        <span class="small" style="min-width:80px">Tilburg</span>
+        <div class="score-bar-wrap"><div class="score-bar-fill" style="width:64%; --bar-start:var(--accent3); --bar-end:#4a9820; animation-delay:0.25s"></div></div>
+        <span class="mono" style="font-size:12px; color:var(--t3)">64</span>
+        <span class="tag tag--green">2.0% pen.</span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ──────────────────────────────────────────────
+       COMMAND BAR
+  ────────────────────────────────────────────────── -->
+  <div class="section reveal" style="animation-delay:0.35s">
+    <div class="section-label">Command bar — snelzoeken op postcode</div>
+    <div style="max-width: 560px">
+      <div class="cmd-bar">
+        <div class="cmd-input-row">
+          <svg class="cmd-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input class="cmd-input" placeholder="Zoek postcode of stad…" value="Gel">
+          <span class="cmd-hint">ESC</span>
+        </div>
+        <div class="cmd-results">
+          <div class="cmd-result active">
+            <div class="cmd-result-icon">4190</div>
+            <div class="cmd-result-text">
+              <div class="cmd-result-title">Geldermalsen</div>
+              <div class="cmd-result-sub">Centrum verzorgingsgebied · 30 min radius</div>
+            </div>
+            <span class="cmd-result-badge">basis</span>
+          </div>
+          <div class="cmd-result">
+            <div class="cmd-result-icon">4191</div>
+            <div class="cmd-result-text">
+              <div class="cmd-result-title">Geldermalsen Noord</div>
+              <div class="cmd-result-sub">2.341 inwoners · 0.8% penetratie</div>
+            </div>
+          </div>
+          <div class="cmd-result">
+            <div class="cmd-result-icon">4193</div>
+            <div class="cmd-result-text">
+              <div class="cmd-result-title">Geldermalsen Oost</div>
+              <div class="cmd-result-sub">1.892 inwoners · 1.1% penetratie</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── Ticker populeren ──────────────────────────────
+const tickerData = [
+  { pc: '5443', stad: 'Laarbeek',  score: 100 },
+  { pc: '5441', stad: 'Laarbeek',  score: 100 },
+  { pc: '8111', stad: 'Raalte',    score: 100 },
+  { pc: '8107', stad: 'Raalte',    score: 100 },
+  { pc: '6511', stad: 'Nijmegen',  score: 91  },
+  { pc: '4001', stad: 'Tiel',      score: 78  },
+  { pc: '5011', stad: 'Tilburg',   score: 64  },
+  { pc: '4002', stad: 'Tiel',      score: 61  },
+  { pc: '5211', stad: 'Den Bosch', score: 58  },
+  { pc: '4811', stad: 'Breda',     score: 52  },
+  { pc: '5038', stad: 'Tilburg',   score: 49  },
+]
+// Dupliceer voor naadloze loop
+const all = [...tickerData, ...tickerData]
+const track = document.getElementById('ticker')
+all.forEach(item => {
+  const el = document.createElement('div')
+  el.className = 'ticker-item'
+  el.innerHTML = `<span class="pc">${item.pc}</span><span class="small">${item.stad}</span><span class="sc">${item.score}</span>`
+  track.appendChild(el)
+})
+
+// ── Hit counter ────────────────────────────────────
+const digits = '3 3 . 3 3 3'.split(' ')
+const counter = document.getElementById('hitCounter')
+digits.forEach((d, i) => {
+  const el = document.createElement('div')
+  el.className = 'hit-digit'
+  el.innerHTML = `<span style="animation-delay:${i * 60}ms">${d}</span>`
+  if (d === '.') {
+    el.style.fontSize = '28px'
+    el.style.alignItems = 'flex-end'
+    el.style.paddingBottom = '6px'
+    el.style.color = 'var(--t4)'
+  }
+  counter.appendChild(el)
+})
+
+// ── Dot matrix ────────────────────────────────────
+const matrix = document.getElementById('dotMatrix')
+const COLS = 12, ROWS = 4
+for (let r = 0; r < ROWS; r++) {
+  for (let c = 0; c < COLS; c++) {
+    const dot = document.createElement('div')
+    dot.className = 'dot-matrix-dot'
+    // Golf-patroon: delay gebaseerd op diagonaal
+    const delay = ((r + c) / (ROWS + COLS)) * 2800
+    dot.style.animationDelay = `${delay}ms`
+    // Kleur wisselt langs rijen
+    const colors = ['var(--accent)', 'var(--accent2)', 'var(--accent3)', '#a78bfa']
+    dot.style.background = colors[r % colors.length]
+    matrix.appendChild(dot)
+  }
+}
+</script>
+</body>
+</html>

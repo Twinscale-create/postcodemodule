@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet'
+import { MapPin, Clock, Maximize2 } from 'lucide-react'
+import { MapContainer, TileLayer, CircleMarker, Circle, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { Match, HeatMode, KansPunt, KlantGebied, CbsData } from '@/types'
@@ -22,9 +23,10 @@ function HomeMarker({ pos, postcode }: { pos: [number, number]; postcode: string
       >
         <Popup maxWidth={240}>
           <div style={{ fontFamily: 'var(--font-primary)' }}>
-            <p style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', marginBottom: 4 }}>
-              ★ Vestiging · {postcode}
-            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 4 }}>
+              <MapPin size={12} color="#E85D04" />
+              <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>Vestiging · {postcode}</span>
+            </div>
             <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
               Referentiepostcode voor het klant-DNA algoritme.
             </p>
@@ -180,6 +182,37 @@ export default function MapInner({
       />
 
       {homeCoords && <HomeMarker pos={homeCoords} postcode={homePostcode} />}
+
+      {/* ── Verzorgingsgebied: 30-min rijden vanuit Geldermalsen (~25km radius) ── */}
+      <Circle
+        center={[51.8667, 5.2833]}
+        radius={25000}
+        pathOptions={{
+          color:       '#D4A050',
+          weight:      1.5,
+          opacity:     0.55,
+          dashArray:   '6 5',
+          fillColor:   '#D4A050',
+          fillOpacity: 0.05,
+        }}
+      >
+        <Popup maxWidth={210}>
+          <div style={{ fontFamily: 'var(--font-primary)', padding: '2px 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+              <MapPin size={12} color="#D4A050" />
+              <span style={{ fontWeight: 700, fontSize: 13 }}>Verzorgingsgebied</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '3px' }}>
+              <Clock size={10} color="#999" />
+              <span style={{ fontSize: 11, color: '#666' }}>~30 min reistijd</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <Maximize2 size={10} color="#999" />
+              <span style={{ fontSize: 11, color: '#666' }}>25 km radius · Geldermalsen</span>
+            </div>
+          </div>
+        </Popup>
+      </Circle>
     </MapContainer>
   )
 }

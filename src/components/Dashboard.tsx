@@ -1,12 +1,13 @@
 'use client'
 
 import React, { useState, useCallback, useEffect, useLayoutEffect, useRef } from 'react'
-import { MapPin, Users, Building2, Home, TrendingUp, Map as MapIcon, LayoutList } from 'lucide-react'
+import { MapPin, Users, Building2, Home, TrendingUp, Map as MapIcon, LayoutList, Search, X } from 'lucide-react'
 import { Match, HeatMode, KansPunt, KlantGebied, CbsData } from '@/types'
 import { getStad } from '@/lib/postcodeStad'
 import { getCoordsSync } from '@/lib/geocode'
 import DutchMap from './DutchMap'
 import ShaderBackground from './ShaderBackground'
+import TwinScaleLogo from './TwinScaleLogo'
 import KlantenShader from './KlantenShader'
 import KansenShader from './KansenShader'
 import { supabase } from '@/lib/supabase'
@@ -29,6 +30,25 @@ interface DashboardProps {
 
 const DASH_H = 200
 
+// ── Bedrijfsprofiel — kassastatistieken ──────────────────────────────────────
+const BEDRIJF = {
+  omzet:       5_000_000,   // jaaromzet €
+  bon:         150,          // gem. bonbedrag €
+  damesPct:    70,           // % damesafdeling
+  herenPct:    30,           // % herenafdeling
+  bezoekFreq:  3,            // gem. bezoeken/jaar per klant (modesector)
+  vestiging:   'Geldermalsen',
+  reistijdMin: 30,           // gem. reistijd klant (minuten)
+}
+const B = {
+  transacties:  Math.round(BEDRIJF.omzet / BEDRIJF.bon),
+  klanten:      Math.round(BEDRIJF.omzet / BEDRIJF.bon / BEDRIJF.bezoekFreq),
+  omzetDames:   Math.round(BEDRIJF.omzet * BEDRIJF.damesPct / 100),
+  omzetHeren:   Math.round(BEDRIJF.omzet * BEDRIJF.herenPct / 100),
+  omzetPerKlant: Math.round(BEDRIJF.omzet / Math.round(BEDRIJF.omzet / BEDRIJF.bon / BEDRIJF.bezoekFreq)),
+  penetratie:   '3.8',       // % van verzorgingsgebied (~295K doelgroep)
+}
+
 export default function Dashboard({ matches, kansen, klantGebieden }: DashboardProps) {
   const [heatMode, setHeatMode]   = useState<HeatMode>('kansen')
   const [viewTab, setViewTab]     = useState<'kaart' | 'postcodes' | 'klanten'>('kaart')
@@ -37,6 +57,8 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
   const [klantSort,     setKlantSort]     = useState<'klanten' | 'pen' | 'postcode' | 'leeftijd' | 'man' | 'vrouw' | 'koop'>('klanten')
   const [klantSortDir,  setKlantSortDir]  = useState<'desc' | 'asc'>('desc')
   const [klantSearch,   setKlantSearch]   = useState('')
+  const [searchFocused, setSearchFocused] = useState(false)
+  const searchRef = useRef<HTMLDivElement>(null)
 
   const [selectedKans,     setSelectedKans]     = useState<KansPunt | null>(null)
   const [selectedCbs,      setSelectedCbs]      = useState<CbsData | null>(null)
@@ -344,11 +366,9 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
             <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '8px' }}>
               {/* Logo + 3 KPIs */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginRight: '4px' }}>
-                  <div style={{ width: '20px', height: '20px', borderRadius: '5px', background: 'rgba(200,129,58,0.10)', border: '1px solid rgba(200,129,58,0.20)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <MapPin size={9} color="var(--accent)" />
-                  </div>
-                  <span style={{ fontWeight: 500, fontSize: '14px', letterSpacing: '0.01em', color: S.t1, fontFamily: 'var(--font-display)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginRight: '6px' }}>
+                  <TwinScaleLogo size={28} color="var(--accent)" />
+                  <span style={{ fontWeight: 600, fontSize: '15px', letterSpacing: '0.02em', color: S.t1, fontFamily: 'var(--font-display)' }}>
                     Twin<span style={{ color: 'var(--accent)', fontStyle: 'italic' }}>Scale</span>
                   </span>
                 </div>
@@ -373,6 +393,48 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
                     <span style={{ fontSize: '28px', lineHeight: 1, color: p.color, fontFamily: 'var(--font-dotmatrix)', letterSpacing: '0.04em', textShadow: `0 0 16px ${p.glow}` }}>{p.value}</span>
                   </div>
                 ))}
+              </div>
+
+              {/* ── Kassastatistieken ── */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '5px', flexShrink: 0 }}>
+                {([
+                  { label: 'Jaaromzet',     value: '€5M',                        color: '#D4A050', glow: 'rgba(212,160,80,0.25)'  },
+                  { label: 'Gem. bon',       value: `€${BEDRIJF.bon}`,            color: '#E8C840', glow: 'rgba(232,200,64,0.22)'  },
+                  { label: 'Transacties',    value: `${(B.transacties/1000).toFixed(0)}K/jr`, color: '#C8884A', glow: 'rgba(200,136,74,0.22)' },
+                  { label: 'Unieke klanten', value: `${(B.klanten/1000).toFixed(1)}K`, color: '#67BFDA', glow: 'rgba(103,191,218,0.22)' },
+                  { label: '€ / klant/jr',  value: `€${B.omzetPerKlant}`,        color: '#8FD44C', glow: 'rgba(143,212,76,0.22)'  },
+                  { label: 'Penetratie',     value: `${B.penetratie}%`,           color: '#A87ACC', glow: 'rgba(168,122,204,0.22)' },
+                ] as { label: string; value: string; color: string; glow: string }[]).map(k => (
+                  <div key={k.label} style={{
+                    background: 'rgba(8,10,20,0.55)',
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
+                    borderRadius: 'var(--r-sm)',
+                    padding: '6px 8px',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    borderTop: `2px solid ${k.color}44`,
+                    display: 'flex', flexDirection: 'column', gap: '2px',
+                  }}>
+                    <span style={{ fontSize: '7px', fontWeight: 700, color: 'rgba(232,245,242,0.35)', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: 'var(--font)', whiteSpace: 'nowrap' }}>{k.label}</span>
+                    <span style={{ fontSize: '15px', lineHeight: 1, color: k.color, fontFamily: 'var(--font-dotmatrix)', letterSpacing: '0.02em', textShadow: `0 0 10px ${k.glow}` }}>{k.value}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* ── Vestiging + split ── */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', background: 'rgba(8,10,20,0.50)', borderRadius: 'var(--r-sm)', padding: '4px 10px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <MapPin size={9} color="rgba(212,160,80,0.7)" />
+                  <span style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(232,245,242,0.55)', letterSpacing: '0.04em' }}>{BEDRIJF.vestiging}</span>
+                  <span style={{ fontSize: '9px', color: 'rgba(232,245,242,0.30)' }}>·</span>
+                  <span style={{ fontSize: '9px', color: 'rgba(232,245,242,0.40)' }}>{BEDRIJF.reistijdMin} min reistijd</span>
+                </div>
+                <div style={{ display: 'flex', gap: '3px', alignItems: 'center' }}>
+                  <div style={{ height: '6px', width: `${BEDRIJF.damesPct * 0.8}px`, background: 'linear-gradient(90deg, #A87ACC, #D4A0FF)', borderRadius: '3px 0 0 3px' }} />
+                  <div style={{ height: '6px', width: `${BEDRIJF.herenPct * 0.8}px`, background: 'linear-gradient(90deg, #4A9AB0, #67BFDA)', borderRadius: '0 3px 3px 0' }} />
+                  <span style={{ fontSize: '9px', color: 'rgba(168,122,204,0.8)', marginLeft: '4px' }}>D {BEDRIJF.damesPct}%</span>
+                  <span style={{ fontSize: '9px', color: 'rgba(103,191,218,0.8)' }}>H {BEDRIJF.herenPct}%</span>
+                </div>
               </div>
 
             </div>
@@ -711,36 +773,128 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
         {viewTab === 'klanten' && (
           <div className="ts-tab-content">
 
-            {/* Koptekst + zoek */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0, background: 'rgba(4,8,22,0.88)', borderRadius: 'var(--r-md)', padding: '9px 14px', border: '1px solid rgba(82,140,212,0.18)' }}>
-              <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'var(--accent-2)', opacity: 0.85, flexShrink: 0 }} />
-              <span style={{ fontSize: '11px', fontWeight: 700, color: S.t1, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Klanten</span>
-              <div style={{ flex: 1, position: 'relative' }}>
+            {/* Command bar zoek */}
+            <div ref={searchRef} style={{ flexShrink: 0, position: 'relative' }}>
+              {/* Input row */}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: '10px',
+                background: 'rgba(8,10,24,0.92)',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)',
+                border: `1px solid ${searchFocused ? 'rgba(82,196,232,0.40)' : 'rgba(82,140,212,0.18)'}`,
+                borderRadius: searchFocused && klantSearch ? '10px 10px 0 0' : '10px',
+                padding: '10px 14px',
+                transition: 'border-color 0.15s, border-radius 0.15s',
+                boxShadow: searchFocused ? '0 0 0 3px rgba(82,196,232,0.07)' : 'none',
+              }}>
+                <Search size={13} color={searchFocused ? 'var(--accent-2)' : S.t4} style={{ flexShrink: 0, transition: 'color 0.15s' }} />
                 <input
                   type="text"
-                  placeholder="Zoek op postcode of stad…"
+                  placeholder="Zoek postcode of stad…"
                   value={klantSearch}
                   onChange={e => setKlantSearch(e.target.value)}
+                  onFocus={() => setSearchFocused(true)}
+                  onBlur={() => setTimeout(() => setSearchFocused(false), 120)}
                   style={{
-                    width: '100%', boxSizing: 'border-box',
-                    background: S.bg3, border: `1px solid ${S.bdr}`, borderRadius: 'var(--r-sm)',
-                    padding: '5px 28px 5px 10px', fontSize: '11px', color: S.t1,
-                    fontFamily: 'var(--font)', outline: 'none',
-                    transition: 'border-color 0.15s',
+                    flex: 1, background: 'none', border: 'none', outline: 'none',
+                    fontSize: '12px', color: S.t1, fontFamily: 'var(--font)',
+                    caretColor: 'var(--accent-2)',
                   }}
-                  onFocus={e => (e.target.style.borderColor = 'var(--accent-2)')}
-                  onBlur={e => (e.target.style.borderColor = S.bdr)}
                 />
-                {klantSearch && (
+                {klantSearch ? (
                   <button onClick={() => setKlantSearch('')} style={{
-                    position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)',
-                    background: 'none', border: 'none', cursor: 'pointer', color: S.t4, fontSize: '12px', lineHeight: 1, padding: '2px',
-                  }}>✕</button>
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)',
+                    borderRadius: '4px', cursor: 'pointer', color: S.t3,
+                    width: '18px', height: '18px', flexShrink: 0, padding: 0,
+                  }}>
+                    <X size={10} />
+                  </button>
+                ) : (
+                  <span style={{
+                    fontFamily: 'var(--font-mono)', fontSize: '9px', color: S.t4,
+                    background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
+                    borderRadius: '4px', padding: '2px 7px', flexShrink: 0,
+                  }}>
+                    {sortedKlanten.length} gebieden
+                  </span>
                 )}
               </div>
-              <span style={{ fontSize: '9px', fontWeight: 700, background: 'rgba(103,191,218,0.10)', color: 'var(--accent-2)', borderRadius: '3px', padding: '2px 7px', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
-                {sortedKlanten.length}{klantSearch ? `/${klantGebieden.length}` : ''}
-              </span>
+
+              {/* Dropdown resultaten */}
+              {searchFocused && klantSearch.trim() && (() => {
+                const hits = sortedKlanten.slice(0, 6)
+                if (!hits.length) return null
+                return (
+                  <div style={{
+                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50,
+                    background: 'rgba(8,10,24,0.97)',
+                    backdropFilter: 'blur(20px)',
+                    WebkitBackdropFilter: 'blur(20px)',
+                    border: '1px solid rgba(82,196,232,0.30)',
+                    borderTop: '1px solid rgba(82,196,232,0.10)',
+                    borderRadius: '0 0 10px 10px',
+                    overflow: 'hidden',
+                    boxShadow: '0 16px 40px rgba(0,0,0,0.5)',
+                  }}>
+                    {hits.map((k, i) => {
+                      const stad = getStad(k.postcode)
+                      const pen  = (k.inwoners ?? 0) > 0 ? (k.klant_count / k.inwoners! * 100).toFixed(1) : null
+                      const penColor = pen && parseFloat(pen) >= 5 ? '#D44030' : pen && parseFloat(pen) >= 2 ? '#C48830' : S.t4
+                      return (
+                        <div key={k.postcode}
+                          onMouseDown={() => { setKlantSearch(k.postcode); setSearchFocused(false) }}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: '12px',
+                            padding: '10px 14px',
+                            borderBottom: i < hits.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                            cursor: 'pointer',
+                            transition: 'background 0.1s',
+                            background: i === 0 ? 'rgba(82,196,232,0.06)' : 'transparent',
+                          }}
+                          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(82,196,232,0.08)')}
+                          onMouseLeave={e => (e.currentTarget.style.background = i === 0 ? 'rgba(82,196,232,0.06)' : 'transparent')}
+                        >
+                          {/* Postcode badge */}
+                          <div style={{
+                            width: '42px', height: '32px', borderRadius: '6px',
+                            background: 'rgba(82,196,232,0.08)',
+                            border: '1px solid rgba(82,196,232,0.18)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: 700,
+                            color: 'var(--accent-2)', flexShrink: 0,
+                          }}>
+                            {k.postcode}
+                          </div>
+                          {/* Info */}
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: '13px', fontWeight: 600, color: S.t1 }}>
+                              {stad || k.postcode}
+                            </div>
+                            <div style={{ fontSize: '10px', color: S.t3, fontFamily: 'var(--font-mono)', marginTop: '2px' }}>
+                              {k.klant_count} klanten{pen ? ` · ` : ''}{pen && <span style={{ color: penColor }}>{pen}% pen.</span>}
+                            </div>
+                          </div>
+                          {/* Klant count badge */}
+                          <div style={{
+                            fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: 700,
+                            color: 'var(--accent-2)', background: 'rgba(82,196,232,0.10)',
+                            border: '1px solid rgba(82,196,232,0.18)',
+                            borderRadius: '4px', padding: '3px 8px', flexShrink: 0,
+                          }}>
+                            {k.klant_count}
+                          </div>
+                        </div>
+                      )
+                    })}
+                    {sortedKlanten.length > 6 && (
+                      <div style={{ padding: '8px 14px', fontSize: '10px', color: S.t4, fontFamily: 'var(--font-mono)', textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                        +{sortedKlanten.length - 6} meer resultaten in de lijst
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
             </div>
 
             {/* KPI cards */}
@@ -1036,7 +1190,10 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
             </div>
 
             {/* Footer */}
-            <div className="ts-footer">TwinScale · CBS · Carto + OSM</div>
+            <div className="ts-footer" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <TwinScaleLogo size={12} color="rgba(232,245,242,0.30)" />
+              <span>TwinScale · CBS · Carto + OSM</span>
+            </div>
           </div>
         </div>
 

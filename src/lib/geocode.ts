@@ -69,6 +69,7 @@ const KNOWN_COORDS: Record<string, [number, number]> = {
   // Rivierenland / Betuwe
   '4011': [51.8760, 5.3950], '4016': [51.8620, 5.3200], '4021': [51.9350, 5.3920],
   '4031': [51.9150, 5.4800], '4116': [51.8590, 5.2640],
+  '4190': [51.8667, 5.2833], // Geldermalsen centrum
   '4191': [51.8680, 5.2900], // Geldermalsen
   // Bommelerwaard / Zaltbommel / Kerkdriel
   '5301': [51.8210, 5.2500], '5305': [51.8280, 5.2640],

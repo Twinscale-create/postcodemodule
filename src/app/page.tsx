@@ -57,7 +57,7 @@ export default async function Home() {
   const { data: cbsRows } = postcodes.length > 0
     ? await supabase
         .from('pc4_cbs')
-        .select('postcode, cbs_leeftijd, pct_vrouw, pct_koop')
+        .select('postcode, cbs_leeftijd, pct_vrouw, pct_koop, inwoners, lat, lon')
         .in('postcode', postcodes)
     : { data: [] }
 
@@ -67,6 +67,9 @@ export default async function Home() {
     cbs_leeftijd: cbsMap.get(k.postcode)?.cbs_leeftijd ?? undefined,
     pct_vrouw:    cbsMap.get(k.postcode)?.pct_vrouw    ?? undefined,
     pct_koop:     cbsMap.get(k.postcode)?.pct_koop     ?? undefined,
+    inwoners:     cbsMap.get(k.postcode)?.inwoners ?? undefined,
+    lat:          cbsMap.get(k.postcode)?.lat ?? undefined,
+    lon:          cbsMap.get(k.postcode)?.lon ?? undefined,
   }))
 
   return <Dashboard matches={matches} kansen={kansen} klantGebieden={klantGebiedenWithCbs} />

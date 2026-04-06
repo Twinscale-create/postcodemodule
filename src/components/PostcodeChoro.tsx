@@ -6,6 +6,7 @@ import L from 'leaflet'
 import type { Feature, FeatureCollection } from 'geojson'
 import { Match, KansPunt, KlantGebied, CbsData } from '@/types'
 import { getStad } from '@/lib/postcodeStad'
+import { haversineKm } from '@/lib/haversine'
 
 /* ─── Zoom hook ─── */
 function useZoom(): number {
@@ -76,14 +77,15 @@ function kansenFill(score: number): { color: string; opacity: number } {
   return { color: '#7a0000', opacity: 0.88 }
 }
 
-function makeKansenStyle(score: number, selected: boolean): L.PathOptions {
+function makeKansenStyle(score: number, selected: boolean, inGebied = false): L.PathOptions {
   const { color, opacity } = kansenFill(score)
   return {
     fillColor: color,
     fillOpacity: selected ? Math.min(1, opacity + 0.14) : opacity,
-    color:  selected ? '#ffffff' : 'rgba(0,0,0,0.18)',
-    weight: selected ? 2.5 : 0.6,
-    opacity: selected ? 1 : 0.55,
+    // PRIO: amber border + iets zwaarder — normaal: subtiele rand
+    color:   selected ? '#ffffff' : inGebied ? '#D4A050' : 'rgba(0,0,0,0.18)',
+    weight:  selected ? 2.5       : inGebied ? 2.0       : 0.6,
+    opacity: selected ? 1         : inGebied ? 0.90      : 0.55,
   }
 }
 
@@ -98,9 +100,9 @@ function makeKlantStyle(count: number, max: number): L.PathOptions {
    SELECTED KANS POPUP (pin + popup at centroid)
 ══════════════════════════════════════════════════════ */
 function SelectedKansPopup({
-  kans, cbs, nearestPostcode, onDeselect,
+  kans, cbs, nearestPostcode, onDeselect, inGebied,
 }: {
-  kans: KansPunt; cbs: CbsData | null; nearestPostcode: string | null; onDeselect: () => void
+  kans: KansPunt; cbs: CbsData | null; nearestPostcode: string | null; onDeselect: () => void; inGebied?: boolean
 }) {
   const markerRef = useRef<L.CircleMarker | null>(null)
 
@@ -138,6 +140,11 @@ function SelectedKansPopup({
               <div style={{ background: `${color}20`, color, borderRadius: '5px', padding: '2px 7px', fontSize: '10px', fontWeight: 600, border: `1px solid ${color}40` }}>
                 {kans.score}/100 · {scoreLabel}
               </div>
+              {inGebied && (
+                <div style={{ background: 'rgba(212,160,80,0.12)', color: '#D4A050', borderRadius: '4px', padding: '2px 7px', fontSize: '9px', fontWeight: 700, border: '1px solid rgba(212,160,80,0.35)', letterSpacing: '0.07em', textTransform: 'uppercase' }}>
+                  Verzorgingsgebied
+                </div>
+              )}
             </div>
             <button onClick={onDeselect} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--t-4)', fontSize: '14px', lineHeight: 1, marginLeft: '6px' }}>✕</button>
           </div>
@@ -195,6 +202,9 @@ interface Props {
   selectedKans?: KansPunt | null
   selectedCbs?: CbsData | null
   nearestMatchPostcode?: string | null
+  vestigingLat?: number
+  vestigingLon?: number
+  radiusKm?: number
   onSelectKans?: (kans: KansPunt) => void
   onDeselectKans?: () => void
 }
@@ -205,6 +215,7 @@ interface Props {
 export default function PostcodeChoro({
   mode, kansen, klantGebieden, klantCoords,
   selectedKans, selectedCbs, nearestMatchPostcode,
+  vestigingLat, vestigingLon, radiusKm = 25,
   onSelectKans, onDeselectKans,
 }: Props) {
   const [fetchVer, setFetchVer] = useState(0)
@@ -214,6 +225,13 @@ export default function PostcodeChoro({
   // Keep selection in a ref so Leaflet's setStyle can access it without remounting
   const selectedPCRef = useRef<string | undefined>(undefined)
   selectedPCRef.current = selectedKans?.postcode
+
+  // Postcodes binnen het verzorgingsgebied (haversine < radiusKm)
+  const inGebiedSet = new Set(
+    (vestigingLat != null && vestigingLon != null)
+      ? kansen.filter(k => haversineKm(vestigingLat!, vestigingLon!, k.lat, k.lon) <= radiusKm).map(k => k.postcode)
+      : []
+  )
 
   // Lookups (rebuilt each render — props are stable)
   const kansenByPC = new Map(kansen.map(k => [k.postcode, k]))
@@ -235,7 +253,7 @@ export default function PostcodeChoro({
     const isSel = pc === selectedPCRef.current
     if (mode === 'kansen') {
       const k = kansenByPC.get(pc)
-      return k ? makeKansenStyle(k.score, isSel) : { weight: 0, fillOpacity: 0 }
+      return k ? makeKansenStyle(k.score, isSel, inGebiedSet.has(pc)) : { weight: 0, fillOpacity: 0 }
     } else {
       const k = klantByPC.get(pc)
       return k ? makeKlantStyle(k.klant_count, maxKlant) : { weight: 0, fillOpacity: 0 }
@@ -259,9 +277,11 @@ export default function PostcodeChoro({
       if (!kans) return
       const stad = getStad(pc)
       layer.on('click', () => onEachRef.current?.(kans))
+      const isPrio = inGebiedSet.has(pc)
       path.bindTooltip(
         `<div style="font-family:var(--font),system-ui;font-size:12px">
-           <strong style="font-family:var(--font-mono)">${pc}</strong>${stad ? ` <span style="font-size:10px;opacity:0.7">${stad}</span>` : ''}<br/>
+           <strong style="font-family:var(--font-mono)">${pc}</strong>${stad ? ` <span style="font-size:10px;opacity:0.7">${stad}</span>` : ''}
+           ${isPrio ? `<span style="font-size:9px;font-weight:700;color:#D4A050;background:rgba(212,160,80,0.15);border:1px solid rgba(212,160,80,0.35);border-radius:3px;padding:1px 5px;margin-left:5px;letter-spacing:0.06em">PRIO</span>` : ''}<br/>
            Score: <strong style="color:var(--accent)">${kans.score}</strong>/100<br/>
            <span style="font-size:10px;opacity:0.55">Klik voor doelgroep →</span>
          </div>`,
@@ -300,8 +320,8 @@ export default function PostcodeChoro({
         />
       )}
 
-      {/* ── Labels: postcode + stad op elk vlak, zichtbaar vanaf zoom 10 ── */}
-      {zoom >= 10 && mode === 'kansen' && kansen.map(k => {
+      {/* ── Labels: alleen top postcodes, pas zichtbaar bij diepe zoom ── */}
+      {zoom >= 11 && mode === 'kansen' && kansen.slice(0, zoom >= 13 ? 80 : zoom >= 12 ? 50 : 25).map(k => {
         const stad = getStad(k.postcode)
         return (
           <Marker
@@ -314,7 +334,7 @@ export default function PostcodeChoro({
         )
       })}
 
-      {zoom >= 10 && mode === 'klanten' && klantGebieden.map(k => {
+      {zoom >= 11 && mode === 'klanten' && klantGebieden.slice(0, zoom >= 13 ? 80 : zoom >= 12 ? 50 : 25).map(k => {
         const coords = klantCoords.get(k.postcode)
         if (!coords) return null
         const stad = getStad(k.postcode)
@@ -335,6 +355,7 @@ export default function PostcodeChoro({
           kans={selectedKans}
           cbs={selectedCbs ?? null}
           nearestPostcode={nearestMatchPostcode ?? null}
+          inGebied={inGebiedSet.has(selectedKans.postcode)}
           onDeselect={() => onDeselectKans?.()}
         />
       )}

@@ -1,39 +1,106 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { MapPin, Clock, Maximize2 } from 'lucide-react'
-import { MapContainer, TileLayer, CircleMarker, Circle, Popup, useMap } from 'react-leaflet'
+import { Clock, Maximize2, Building2 } from 'lucide-react'
+import { MapContainer, TileLayer, Marker, Circle, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { Match, HeatMode, KansPunt, KlantGebied, CbsData } from '@/types'
 import { getPostcodeCoords } from '@/lib/geocode'
 import PostcodeChoro from './PostcodeChoro'
-import { animate, stagger } from 'animejs'
+import gsap from 'gsap'
 
 // Fix Leaflet default icon in Next.js
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 delete (L.Icon.Default.prototype as any)._getIconUrl
 
-/* ─── Referentie postcode marker ─────────────────── */
-function HomeMarker({ pos, postcode }: { pos: [number, number]; postcode: string }) {
+/* ─── Vestiging marker: bedrijfspand icoon ────────── */
+const BUILDING_SVG = `
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+       fill="none" stroke="#D4A050" stroke-width="1.8"
+       stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/>
+    <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/>
+    <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/>
+    <path d="M10 6h4"/><path d="M10 10h4"/>
+    <path d="M10 14h4"/><path d="M10 18h4"/>
+  </svg>`
+
+function makeVestigingIcon() {
+  return L.divIcon({
+    className: '',
+    iconSize:    [30, 30],
+    iconAnchor:  [15, 15],
+    popupAnchor: [0, -18],
+    html: `
+      <div style="
+        width:30px; height:30px;
+        background:rgba(8,8,16,0.95);
+        border:2px solid #D4A050;
+        border-radius:50%;
+        display:flex; align-items:center; justify-content:center;
+        box-shadow:0 0 0 3px rgba(212,160,80,0.18), 0 2px 10px rgba(0,0,0,0.6);
+        cursor:pointer;
+      ">${BUILDING_SVG}</div>`,
+  })
+}
+
+function VestigingMarker({ pos, postcode, vestiging, reistijdMin, radiusKm }: {
+  pos: [number, number]
+  postcode: string
+  vestiging: string
+  reistijdMin: number
+  radiusKm: number
+}) {
+  const map = useMap()
+
+  function zoomToVerzorgingsgebied() {
+    const latDeg = radiusKm / 111.2
+    const lonDeg = radiusKm / (111.2 * Math.cos(pos[0] * Math.PI / 180))
+    map.fitBounds(
+      [[pos[0] - latDeg, pos[1] - lonDeg], [pos[0] + latDeg, pos[1] + lonDeg]],
+      { padding: [50, 50], animate: true }
+    )
+  }
+
+  const T = {
+    primary:   'rgba(240, 228, 200, 0.95)',
+    secondary: 'rgba(210, 195, 160, 0.60)',
+    muted:     'rgba(190, 175, 140, 0.40)',
+  }
+
   return (
-    <>
-      <CircleMarker center={pos} radius={7}
-        pathOptions={{ fillColor: '#E85D04', fillOpacity: 1, color: '#fff', weight: 2.5 }}
-      >
-        <Popup maxWidth={240}>
-          <div style={{ fontFamily: 'var(--font-primary)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: 4 }}>
-              <MapPin size={12} color="#E85D04" />
-              <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>Vestiging · {postcode}</span>
+    <Marker position={pos} icon={makeVestigingIcon()} eventHandlers={{ click: zoomToVerzorgingsgebied }}>
+      <Popup maxWidth={230} minWidth={200} closeButton={false}>
+        <div style={{ padding: '6px 2px' }}>
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+            <div style={{ background: 'rgba(212,160,80,0.15)', border: '1px solid rgba(212,160,80,0.35)', borderRadius: '8px', padding: '6px 7px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Building2 size={14} color="#D4A050" />
             </div>
-            <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-              Referentiepostcode voor het klant-DNA algoritme.
-            </p>
+            <div>
+              <div style={{ fontSize: '14px', fontWeight: 700, color: T.primary, lineHeight: 1.2, letterSpacing: '0.01em' }}>{vestiging}</div>
+              <div style={{ fontSize: '11px', color: T.secondary, fontFamily: 'monospace', marginTop: '2px', letterSpacing: '0.05em' }}>{postcode}</div>
+            </div>
           </div>
-        </Popup>
-      </CircleMarker>
-    </>
+          {/* Stats */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Clock size={11} color="rgba(212,160,80,0.55)" style={{ flexShrink: 0 }} />
+              <span style={{ fontSize: '12px', color: T.secondary }}>~{reistijdMin} min gemiddelde reistijd</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Maximize2 size={11} color="rgba(212,160,80,0.55)" style={{ flexShrink: 0 }} />
+              <span style={{ fontSize: '12px', color: T.secondary }}>{radiusKm} km verzorgingsgebied</span>
+            </div>
+          </div>
+          {/* Zoom hint */}
+          <div style={{ marginTop: '12px', padding: '7px 10px', background: 'rgba(212,160,80,0.10)', border: '1px solid rgba(212,160,80,0.25)', borderRadius: '6px', textAlign: 'center' }}>
+            <span style={{ fontSize: '11px', color: 'rgba(212,160,80,0.80)', fontWeight: 600 }}>Klik op icoon → zoom naar verzorgingsgebied</span>
+          </div>
+        </div>
+      </Popup>
+    </Marker>
   )
 }
 
@@ -53,26 +120,25 @@ function DataBounds({ kansen }: { kansen: KansPunt[] }) {
   return null
 }
 
-/* ─── Spell: stagger-animate SVG circles on mode switch ─── */
+/* ─── GSAP: stagger-animate SVG circles on mode switch ─── */
 function StaggerMarkers({ trigger }: { trigger: HeatMode }) {
   const map = useMap()
   useEffect(() => {
     const run = () => {
-      const circles = document.querySelectorAll('.leaflet-overlay-pane circle')
+      const circles = Array.from(document.querySelectorAll('.leaflet-overlay-pane circle')) as SVGCircleElement[]
       if (!circles.length) return
-      // save radii, set to 0, then animate back
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      animate(circles as any, {
-        opacity:  [0, 1],
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        r: (el: any) => {
-          const orig = el.getAttribute('r') ?? '5'
-          el.setAttribute('r', '0')
-          return orig
-        },
-        duration: 1600,
-        easing:   'easeOutElastic(1, 0.45)',
-        delay:    stagger(22, { start: 200 }),
+      // Snapshot radii, set to 0, then animate back
+      circles.forEach(c => {
+        c.dataset.origR = c.getAttribute('r') ?? '5'
+        c.setAttribute('r', '0')
+      })
+      gsap.to(circles, {
+        attr: { r: (_i: number, el: SVGCircleElement) => el.dataset.origR ?? '5' },
+        opacity: 1,
+        duration: 1.6,
+        ease: 'elastic.out(1, 0.45)',
+        stagger: 0.022,
+        delay: 0.2,
       })
     }
     const t = setTimeout(run, 350)
@@ -102,6 +168,12 @@ export default function MapInner({
   selectedKans,
   selectedCbs,
   nearestMatchPostcode,
+  vestigingPostcode,
+  vestigingLat,
+  vestigingLon,
+  radiusKm = 25,
+  reistijdMin = 30,
+  vestigingNaam,
   onSelectKans,
   onDeselectKans,
 }: {
@@ -113,19 +185,31 @@ export default function MapInner({
   selectedKans?: KansPunt | null
   selectedCbs?: CbsData | null
   nearestMatchPostcode?: string | null
+  vestigingPostcode?: string
+  vestigingNaam?: string
+  vestigingLat?: number
+  vestigingLon?: number
+  radiusKm?: number
+  reistijdMin?: number
   onSelectKans?: (kans: KansPunt) => void
   onDeselectKans?: () => void
 }) {
   const [matchCoords,  setMatchCoords]  = useState<Map<string, [number, number]>>(new Map())
   const [klantCoords,  setKlantCoords]  = useState<Map<string, [number, number]>>(new Map())
-  const [homeCoords,   setHomeCoords]   = useState<[number, number] | null>(null)
-  const homePostcode = matches[0]?.jouw_postcode ?? '4001'
+  const homePostcode = vestigingPostcode ?? '4190'
 
-  /* Geocode match postcodes + home */
+  // Gebruik vestigingLat/Lon direct als die meegegeven zijn — geen geocode nodig
+  const [homeCoords, setHomeCoords] = useState<[number, number] | null>(
+    vestigingLat != null && vestigingLon != null ? [vestigingLat, vestigingLon] : null
+  )
+
+  /* Geocode match postcodes + home (home alleen als geen expliciete coords) */
   useEffect(() => {
     async function fetchMatchCoords() {
-      const home = await getPostcodeCoords(homePostcode)
-      setHomeCoords(home)
+      if (vestigingLat == null || vestigingLon == null) {
+        const home = await getPostcodeCoords(homePostcode)
+        setHomeCoords(home)
+      }
       const map = new Map<string, [number, number]>()
       for (const m of matches) {
         map.set(m.postcode, await getPostcodeCoords(m.postcode))
@@ -135,18 +219,16 @@ export default function MapInner({
     fetchMatchCoords()
   }, [matches, homePostcode])
 
-  /* Geocode klant postcodes client-side (top 60 max to avoid API rate limits) */
+  /* Build klantCoords from lat/lon already present on each klantGebied (from pc4_cbs via page.tsx) */
   useEffect(() => {
     if (klantGebieden.length === 0) return
-    async function fetchKlantCoords() {
-      const map = new Map<string, [number, number]>()
-      for (const k of klantGebieden.slice(0, 60)) {
-        const coords = await getPostcodeCoords(k.postcode)
-        map.set(k.postcode, coords)
+    const map = new Map<string, [number, number]>()
+    for (const k of klantGebieden) {
+      if (k.lat != null && k.lon != null) {
+        map.set(k.postcode, [k.lat, k.lon])
       }
-      setKlantCoords(map)
     }
-    fetchKlantCoords()
+    setKlantCoords(map)
   }, [klantGebieden])
 
   return (
@@ -177,42 +259,44 @@ export default function MapInner({
         selectedKans={selectedKans}
         selectedCbs={selectedCbs}
         nearestMatchPostcode={nearestMatchPostcode}
+        vestigingLat={vestigingLat}
+        vestigingLon={vestigingLon}
+        radiusKm={radiusKm}
         onSelectKans={onSelectKans}
         onDeselectKans={onDeselectKans}
       />
 
-      {homeCoords && <HomeMarker pos={homeCoords} postcode={homePostcode} />}
-
-      {/* ── Verzorgingsgebied: 30-min rijden vanuit Geldermalsen (~25km radius) ── */}
+      {/* ── Verzorgingsgebied cirkel — dikker op kansen, subtiel op klanten ── */}
       <Circle
-        center={[51.8667, 5.2833]}
-        radius={25000}
-        pathOptions={{
+        center={homeCoords ?? [vestigingLat ?? 51.8667, vestigingLon ?? 5.2833]}
+        radius={radiusKm * 1000}
+        pathOptions={heatMode === 'kansen' ? {
           color:       '#D4A050',
-          weight:      1.5,
-          opacity:     0.55,
-          dashArray:   '6 5',
+          weight:      3,
+          opacity:     0.80,
+          dashArray:   '8 5',
           fillColor:   '#D4A050',
           fillOpacity: 0.05,
+        } : {
+          color:       '#67BFDA',
+          weight:      2,
+          opacity:     0.55,
+          dashArray:   '6 5',
+          fillColor:   '#67BFDA',
+          fillOpacity: 0.03,
         }}
-      >
-        <Popup maxWidth={210}>
-          <div style={{ fontFamily: 'var(--font-primary)', padding: '2px 0' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-              <MapPin size={12} color="#D4A050" />
-              <span style={{ fontWeight: 700, fontSize: 13 }}>Verzorgingsgebied</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '3px' }}>
-              <Clock size={10} color="#999" />
-              <span style={{ fontSize: 11, color: '#666' }}>~30 min reistijd</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-              <Maximize2 size={10} color="#999" />
-              <span style={{ fontSize: 11, color: '#666' }}>25 km radius · Geldermalsen</span>
-            </div>
-          </div>
-        </Popup>
-      </Circle>
+      />
+
+      {/* ── Bedrijfspand marker ── */}
+      {homeCoords && (
+        <VestigingMarker
+          pos={homeCoords}
+          postcode={homePostcode}
+          vestiging={vestigingNaam ?? 'Vestiging'}
+          reistijdMin={reistijdMin}
+          radiusKm={radiusKm}
+        />
+      )}
     </MapContainer>
   )
 }

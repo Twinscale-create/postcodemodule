@@ -7,39 +7,31 @@
  * Een kandidaatpostcode scoort op de BESTE match over alle referenties.
  * Zo wordt het volledige klant-DNA gebruikt, niet slechts één toppostcode.
  *
- * Gewichten gebaseerd op relevantie voor modezaak / retail:
+ * Alleen CBS-dimensies die wél beschikbaar zijn op PC4-niveau:
  *
- *   inkomen   35%  — koopkracht, bestedingsvermogen
- *   pct_hbo   25%  — levensstijl, modebewustzijn
- *   pct_koop  20%  — woningbezit → stabiliteit, hogere discretionaire besteding
- *   leeftijd  15%  — doelgroep leeftijdsmatch
- *   pct_vrouw  5%  — geslachtsverhouding
+ *   pct_koop  60%  — woningbezit → sterkste proxy voor koopkracht en stabiliteit
+ *   leeftijd  30%  — doelgroep leeftijdsmatch
+ *   pct_vrouw 10%  — geslachtsverhouding
  */
 
 export interface CbsProfiel {
-  cbs_inkomen: number   // gemiddeld inkomen in €/jaar
   cbs_leeftijd: number  // gemiddelde leeftijd
-  pct_vrouw: number     // % vrouwen (0-100)
-  pct_hbo: number       // % HBO+ opleiding (0-100)
-  pct_koop: number      // % koopwoningen (0-100)
+  pct_vrouw:    number  // % vrouwen (0-100)
+  pct_koop:     number  // % koopwoningen (0-100)
 }
 
 // Landelijke ranges voor normalisatie (realistische NL PC4 grenzen)
 const RANGES: Record<keyof CbsProfiel, [number, number]> = {
-  cbs_inkomen:  [30000, 80000],
-  cbs_leeftijd: [24,    50],
-  pct_vrouw:    [46,    58],
-  pct_hbo:      [28,    80],
-  pct_koop:     [15,    80],
+  cbs_leeftijd: [24, 50],
+  pct_vrouw:    [46, 58],
+  pct_koop:     [15, 80],
 }
 
 // Gewichten per dimensie (som = 1.0)
 const WEIGHTS: Record<keyof CbsProfiel, number> = {
-  cbs_inkomen:  0.35,
-  cbs_leeftijd: 0.15,
-  pct_vrouw:    0.05,
-  pct_hbo:      0.25,
-  pct_koop:     0.20,
+  pct_koop:     0.60,
+  cbs_leeftijd: 0.30,
+  pct_vrouw:    0.10,   // geslachtsverdeling (V% + M% = 100%)
 }
 
 function normalize(value: number, [min, max]: [number, number]): number {

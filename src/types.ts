@@ -16,6 +16,8 @@ export interface KlantGebied {
   cbs_leeftijd?: number
   pct_vrouw?: number
   pct_koop?: number
+  lat?: number
+  lon?: number
 }
 
 export interface KansPunt {
@@ -24,6 +26,7 @@ export interface KansPunt {
   lon: number
   score: number
   inwoners: number
+  dist_km?: number   // afstand tot vestiging in km (v2 algoritme)
 }
 
 export interface Match {

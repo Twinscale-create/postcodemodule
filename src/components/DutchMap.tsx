@@ -41,6 +41,12 @@ interface DutchMapProps {
   selectedKans?: KansPunt | null
   selectedCbs?: CbsData | null
   nearestMatchPostcode?: string | null
+  vestigingPostcode?: string
+  vestigingNaam?: string
+  vestigingLat?: number
+  vestigingLon?: number
+  radiusKm?: number
+  reistijdMin?: number
   onSelectKans?: (kans: KansPunt) => void
   onDeselectKans?: () => void
 }
@@ -48,6 +54,7 @@ interface DutchMapProps {
 export default function DutchMap({
   matches, kansen, klantGebieden, heatMode,
   flyTarget, selectedKans, selectedCbs, nearestMatchPostcode,
+  vestigingPostcode, vestigingNaam, vestigingLat, vestigingLon, radiusKm, reistijdMin,
   onSelectKans, onDeselectKans,
 }: DutchMapProps) {
   return (
@@ -61,6 +68,12 @@ export default function DutchMap({
         selectedKans={selectedKans}
         selectedCbs={selectedCbs}
         nearestMatchPostcode={nearestMatchPostcode}
+        vestigingPostcode={vestigingPostcode}
+        vestigingNaam={vestigingNaam}
+        vestigingLat={vestigingLat}
+        vestigingLon={vestigingLon}
+        radiusKm={radiusKm}
+        reistijdMin={reistijdMin}
         onSelectKans={onSelectKans}
         onDeselectKans={onDeselectKans}
       />

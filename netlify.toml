@@ -1,0 +1,8 @@
+[build]
+  command = "echo 'skip'"
+  publish = "out"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+  [plugins.inputs]
+    excludedPaths = "**"

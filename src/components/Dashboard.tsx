@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useCallback, useEffect, useRef } from 'react'
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { MapPin, Users, Building2, Home, TrendingUp, Map as MapIcon, LayoutList, Search, X } from 'lucide-react'
 import { Match, HeatMode, KansPunt, KlantGebied, CbsData } from '@/types'
 import { getStad } from '@/lib/postcodeStad'
@@ -12,11 +12,24 @@ import TwinScaleLogo from './TwinScaleLogo'
 import KlantenShader from './KlantenShader'
 import KansenShader from './KansenShader'
 import { supabase } from '@/lib/supabase'
+import { useQuery } from '@tanstack/react-query'
+import { useReactTable, getCoreRowModel, getSortedRowModel, getFilteredRowModel } from '@tanstack/react-table'
+import type { ColumnDef, SortingState } from '@tanstack/react-table'
+import { useDashboardStore } from '@/store/dashboardStore'
 import gsap from 'gsap'
 import { useGSAP } from '@gsap/react'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
+
+async function fetchCbsData(postcode: string): Promise<CbsData | null> {
+  const { data } = await supabase
+    .from('pc4_cbs')
+    .select('cbs_leeftijd, pct_vrouw, pct_hbo, pct_koop')
+    .eq('postcode', postcode)
+    .single()
+  return (data as CbsData | null) ?? null
+}
 
 function avg(arr: number[]) {
   if (!arr.length) return 0
@@ -71,24 +84,33 @@ function fmtCount(v: number) {
 }
 
 export default function Dashboard({ matches, kansen, klantGebieden }: DashboardProps) {
-  const [heatMode, setHeatMode]   = useState<HeatMode>('kansen')
-  const [viewTab, setViewTab]     = useState<'kaart' | 'postcodes' | 'klanten'>('kaart')
+  // ── Zustand store — tab/mode/selection state ─────────────────────────────
+  const {
+    viewTab, setViewTab,
+    heatMode, setHeatMode,
+    selectedKans, setSelectedKans,
+    selectedKlant, setSelectedKlant,
+    flyTarget, setFlyTarget,
+    clearSelection,
+  } = useDashboardStore()
+
   const [kpiExpanded, setKpiExpanded] = useState(true)
   const [kansenSort,    setKansenSort]    = useState<'score' | 'postcode'>('score')
   const [kansenSortDir, setKansenSortDir] = useState<'desc' | 'asc'>('desc')
-  const [klantSort,     setKlantSort]     = useState<'klanten' | 'pen' | 'postcode' | 'leeftijd' | 'man' | 'vrouw' | 'koop'>('klanten')
-  const [klantSortDir,  setKlantSortDir]  = useState<'desc' | 'asc'>('desc')
+  const [klantSorting,  setKlantSorting]  = useState<SortingState>([{ id: 'klant_count', desc: true }])
   const [klantSearch,   setKlantSearch]   = useState('')
   const [searchFocused, setSearchFocused] = useState(false)
   const searchRef = useRef<HTMLDivElement>(null)
 
-  const [selectedKans,     setSelectedKans]     = useState<KansPunt | null>(null)
-  const [selectedCbs,      setSelectedCbs]      = useState<CbsData | null>(null)
-  const [loadingCbs,       setLoadingCbs]       = useState(false)
-  const [selectedKlant,    setSelectedKlant]    = useState<KlantGebied | null>(null)
-  const [selectedKlantCbs, setSelectedKlantCbs] = useState<CbsData | null>(null)
-  const [loadingKlantCbs,  setLoadingKlantCbs]  = useState(false)
-  const [flyTarget, setFlyTarget] = useState<{ lat: number; lon: number; zoom?: number } | null>(null)
+  // ── React Query — CBS data voor kansen (cached 10 min per postcode) ───────
+  const { data: selectedCbs, isLoading: loadingCbs } = useQuery({
+    queryKey: ['cbs', selectedKans?.postcode],
+    queryFn: () => fetchCbsData(selectedKans!.postcode),
+    enabled: !!selectedKans,
+  })
+
+  // Klant CBS-data is al inline beschikbaar via page.tsx — geen extra fetch nodig
+  const klantCbsData = selectedKlant?.cbs_leeftijd != null ? selectedKlant : null
 
   const cbsKansRef      = useRef<HTMLDivElement>(null)
   const cbsKlantRef     = useRef<HTMLDivElement>(null)
@@ -155,11 +177,6 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
     else { setKansenSort(key); setKansenSortDir('desc') }
   }
 
-  function handleKlantSort(key: 'klanten'|'pen'|'postcode'|'leeftijd'|'man'|'vrouw'|'koop') {
-    if (klantSort === key) setKlantSortDir(d => d === 'desc' ? 'asc' : 'desc')
-    else { setKlantSort(key); setKlantSortDir('desc') }
-  }
-
   const matchPostcodes  = new Set(matches.map(m => m.postcode))
   const klantPostcodes  = new Set(klantGebieden.map(k => k.postcode))
   const topKansen = kansen
@@ -179,57 +196,54 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
       return kansenSortDir === 'desc' ? -diff : diff
     })
 
-  const filteredKlanten = klantSearch.trim()
-    ? klantGebieden.filter(k => {
-        const q = klantSearch.toLowerCase()
-        return k.postcode.includes(q) || getStad(k.postcode).toLowerCase().includes(q)
-      })
-    : klantGebieden
+  // ── TanStack Table — klanten (sorting + filtering) ──────────────────────
+  const klantColumns = useMemo<ColumnDef<KlantGebied>[]>(() => [
+    { id: 'index',      enableSorting: false },
+    { accessorKey: 'postcode',    sortingFn: (a, b) => Number(a.original.postcode) - Number(b.original.postcode) },
+    { accessorKey: 'klant_count' },
+    { id: 'penetratie', accessorFn: (r) => (r.inwoners ?? 0) > 0 ? r.klant_count / r.inwoners! : 0 },
+    { accessorKey: 'cbs_leeftijd' },
+    { accessorKey: 'pct_vrouw' },
+    { accessorKey: 'pct_koop' },
+    { accessorKey: 'inwoners' },
+  ], [])
 
-  const sortedKlanten = [...filteredKlanten].sort((a, b) => {
-    let diff = 0
-    if (klantSort === 'postcode')  diff = Number(a.postcode) - Number(b.postcode)
-    else if (klantSort === 'pen')  diff = ((a.inwoners ?? 0) > 0 ? a.klant_count / a.inwoners! : 0) - ((b.inwoners ?? 0) > 0 ? b.klant_count / b.inwoners! : 0)
-    else if (klantSort === 'leeftijd') diff = (a.cbs_leeftijd ?? 0) - (b.cbs_leeftijd ?? 0)
-    else if (klantSort === 'vrouw')    diff = (a.pct_vrouw ?? 0) - (b.pct_vrouw ?? 0)
-    else if (klantSort === 'man')      diff = (100 - (a.pct_vrouw ?? 0)) - (100 - (b.pct_vrouw ?? 0))
-    else if (klantSort === 'koop')     diff = (a.pct_koop ?? 0) - (b.pct_koop ?? 0)
-    else diff = a.klant_count - b.klant_count
-    return klantSortDir === 'desc' ? -diff : diff
+  const klantTable = useReactTable({
+    data: klantGebieden,
+    columns: klantColumns,
+    state: { sorting: klantSorting, globalFilter: klantSearch },
+    onSortingChange: setKlantSorting,
+    onGlobalFilterChange: setKlantSearch,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    globalFilterFn: (row, _, filterValue) => {
+      const q = filterValue.toLowerCase()
+      return row.original.postcode.includes(q) || getStad(row.original.postcode).toLowerCase().includes(q)
+    },
   })
-  const maxKlantCount = Math.max(...sortedKlanten.map(x => x.klant_count), 1)
-  const maxKlantPen   = Math.max(...sortedKlanten.filter(x => (x.inwoners ?? 0) > 0).map(x => Math.min(1, x.klant_count / x.inwoners!)), 0.001)
 
-  const handleSelectKans = useCallback(async (kans: KansPunt) => {
+  const maxKlantCount = Math.max(...klantGebieden.map(x => x.klant_count), 1)
+  const maxKlantPen   = Math.max(...klantGebieden.filter(x => (x.inwoners ?? 0) > 0).map(x => Math.min(1, x.klant_count / x.inwoners!)), 0.001)
+
+  const handleSelectKans = useCallback((kans: KansPunt) => {
     if (selectedKans?.postcode === kans.postcode) {
-      setSelectedKans(null); setSelectedCbs(null); setFlyTarget(null); return
+      setSelectedKans(null); setFlyTarget(null); return
     }
-    setSelectedKans(kans); setSelectedCbs(null); setLoadingCbs(true)
-    setSelectedKlant(null); setSelectedKlantCbs(null)
+    setSelectedKans(kans)
+    setSelectedKlant(null)
     setFlyTarget({ lat: kans.lat, lon: kans.lon })
-    const { data } = await supabase
-      .from('pc4_cbs')
-      .select('cbs_leeftijd, pct_vrouw, pct_hbo, pct_koop')
-      .eq('postcode', kans.postcode)
-      .single()
-    setSelectedCbs(data as CbsData | null)
-    setLoadingCbs(false)
-  }, [selectedKans])
+    // React Query fetches CBS data automatically via useQuery
+  }, [selectedKans, setSelectedKans, setSelectedKlant, setFlyTarget])
 
-  const handleSelectKlant = useCallback(async (klant: KlantGebied) => {
+  const handleSelectKlant = useCallback((klant: KlantGebied) => {
     if (selectedKlant?.postcode === klant.postcode) {
-      setSelectedKlant(null); setSelectedKlantCbs(null); return
+      setSelectedKlant(null); return
     }
-    setSelectedKlant(klant); setSelectedKlantCbs(null); setLoadingKlantCbs(true)
-    setSelectedKans(null); setSelectedCbs(null)
-    const { data } = await supabase
-      .from('pc4_cbs')
-      .select('cbs_leeftijd, pct_vrouw, pct_hbo, pct_koop')
-      .eq('postcode', klant.postcode)
-      .single()
-    setSelectedKlantCbs(data as CbsData | null)
-    setLoadingKlantCbs(false)
-  }, [selectedKlant])
+    setSelectedKlant(klant)
+    setSelectedKans(null)
+    // React Query fetches CBS data automatically via useQuery
+  }, [selectedKlant, setSelectedKlant, setSelectedKans])
 
   // ── GSAP: CBS card reveal — kansen panel
   useGSAP(() => {
@@ -240,10 +254,10 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
 
   // ── GSAP: CBS card reveal — klant panel
   useGSAP(() => {
-    if (!selectedKlantCbs || !cbsKlantRef.current) return
+    if (!klantCbsData || !cbsKlantRef.current) return
     const cards = cbsKlantRef.current.querySelectorAll('[data-cbs-card]')
     gsap.from(cards, { y: 14, opacity: 0, duration: 1.1, ease: 'expo.out', stagger: 0.11 })
-  }, { dependencies: [selectedKlantCbs] })
+  }, { dependencies: [klantCbsData] })
 
   // ── GSAP: score bars — bounce fill
   useGSAP(() => {
@@ -510,10 +524,10 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
                 <div style={{ background: S.bg3, borderRadius: 'var(--r-sm)', padding: '3px 8px', fontSize: '11px', fontWeight: 700, color: S.t3, border: `1px solid ${S.bdr}`, fontFamily: 'var(--font-mono)' }}>
                   {selectedKans.score}/100
                 </div>
-                <button onClick={() => { setSelectedKans(null); setSelectedCbs(null) }}
+                <button onClick={() => { setSelectedKans(null) }}
                   className="ts-close-btn">✕</button>
               </div>
-              <div ref={cbsKansRef} style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+              <div ref={cbsKansRef} style={{ display: 'flex', flex: 1, overflow: 'auto' }}>
                 {((() => {
                   // Vergelijk met de dichtstbijzijnde klantpostcode (niet de abstracte gemiddelde)
                   const ref = getNearestKlantGebied(selectedKans)
@@ -552,7 +566,7 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
                     match: marktInw >= 5000 ? 'Goed' : marktInw >= 1500 ? 'Ok' : 'Ver',
                     detail: marktInw >= 5000 ? 'Groot marktpotentieel' : marktInw >= 1500 ? 'Gemiddeld potentieel' : 'Klein gebied — beperkt potentieel' },
                 ]})() as { label: string; Icon: React.ElementType; gebied: string; color: string; glow: string; match: string; detail: string; refVal: string }[]).map((cb, i) => (
-                  <div key={cb.label} style={{ flex: 1, padding: '6px 10px', borderLeft: i > 0 ? '1px solid rgba(255,255,255,0.07)' : 'none', borderTop: `2px solid ${cb.color}55`, display: 'flex', flexDirection: 'column', gap: '4px', overflow: 'hidden' }}>
+                  <div key={cb.label} style={{ flex: 1, padding: '8px 10px', borderLeft: i > 0 ? '1px solid rgba(255,255,255,0.07)' : 'none', borderTop: `2px solid ${cb.color}55`, display: 'flex', flexDirection: 'column', gap: '5px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px', flexShrink: 0 }}>
                       <span style={{ fontSize: '8px', fontWeight: 700, color: cb.color, textTransform: 'uppercase', letterSpacing: '0.06em', display: 'flex', alignItems: 'center', gap: '3px', whiteSpace: 'nowrap' }}>
                         {React.createElement(cb.Icon, { size: 9, style: { color: cb.color, flexShrink: 0 } })}
@@ -565,9 +579,9 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
                     <div style={{ fontSize: '20px', fontWeight: 700, lineHeight: 1, color: cb.color, fontFamily: 'var(--font-dotmatrix)', textShadow: `0 0 10px ${cb.glow}`, whiteSpace: 'nowrap', flexShrink: 0 }}>
                       {cb.gebied}
                     </div>
-                    <p style={{ fontSize: '9px', color: 'rgba(232,245,242,0.55)', lineHeight: 1.3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{cb.detail}</p>
+                    <p style={{ fontSize: '10px', color: 'rgba(232,245,242,0.65)', lineHeight: 1.4 }}>{cb.detail}</p>
                     {cb.refVal && (
-                      <p style={{ fontSize: '8px', color: 'rgba(232,245,242,0.30)', marginTop: 'auto', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 0 }}>{cb.refVal}</p>
+                      <p style={{ fontSize: '9px', color: 'rgba(232,245,242,0.35)', marginTop: 'auto', lineHeight: 1.3 }}>{cb.refVal}</p>
                     )}
                   </div>
                 ))}
@@ -580,74 +594,54 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
                 <div style={{ background: S.bg3, borderRadius: 'var(--r-sm)', padding: '3px 10px', fontSize: '13px', fontWeight: 700, color: S.t1, border: `1px solid ${S.bdr2}`, fontFamily: 'var(--font-mono)' }}>{selectedKans.postcode}</div>
-                <button onClick={() => { setSelectedKans(null); setSelectedCbs(null) }} className="ts-close-btn">✕</button>
+                <button onClick={() => { setSelectedKans(null) }} className="ts-close-btn">✕</button>
               </div>
               <p style={{ fontSize: '11px', color: S.t2 }}>Geen CBS-data voor <strong style={{ color: S.t1, fontFamily: 'var(--font-mono)' }}>{selectedKans.postcode}</strong>.</p>
             </div>
           )}
 
-          {/* Klant loading */}
-          {selectedKlant && loadingKlantCbs && (
-            <div className="ts-loading-row">
-              <div className="ts-spinner" />
-              <span style={{ fontSize: '12px', color: S.t3 }}>CBS data laden voor <span style={{ color: 'var(--accent-2)', fontFamily: 'var(--font-mono)' }}>{selectedKlant.postcode}</span>…</span>
-            </div>
-          )}
-
-          {/* Klant CBS panel — 4 wide glassmorphism cards */}
-          {selectedKlant && !loadingKlantCbs && selectedKlantCbs && (
+          {/* Klant CBS panel — alleen op klanten tab, data uit KlantGebied (geen fetch) */}
+          {viewTab === 'klanten' && selectedKlant && klantCbsData && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', height: '100%' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '7px', flexShrink: 0 }}>
-                <div style={{ background: 'rgba(103,191,218,0.10)', border: '1px solid rgba(103,191,218,0.28)', borderRadius: 'var(--r-sm)', padding: '3px 10px', fontSize: '13px', fontWeight: 700, color: 'var(--accent-2)', fontFamily: 'var(--font-mono)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', fontWeight: 700, color: 'var(--accent-2)', letterSpacing: '0.04em' }}>
                   {selectedKlant.postcode}
-                </div>
-                {getStad(selectedKlant.postcode) && <span style={{ fontSize: '11px', fontWeight: 600, color: S.t2 }}>{getStad(selectedKlant.postcode)}</span>}
-                <div style={{ background: S.bg3, borderRadius: 'var(--r-sm)', padding: '3px 8px', fontSize: '11px', fontWeight: 700, color: S.t3, border: `1px solid ${S.bdr}`, fontFamily: 'var(--font-mono)' }}>
+                </span>
+                {getStad(selectedKlant.postcode) && (
+                  <span style={{ fontSize: '12px', fontWeight: 500, color: S.t2 }}>{getStad(selectedKlant.postcode)}</span>
+                )}
+                <span style={{ fontSize: '10px', color: S.t3, fontFamily: 'var(--font-mono)' }}>
                   {selectedKlant.klant_count} klanten{(selectedKlant.inwoners ?? 0) > 0 ? ` · ${Math.min(100, (selectedKlant.klant_count / selectedKlant.inwoners!) * 100).toFixed(1)}% pen.` : ''}
-                </div>
-                <button onClick={() => { setSelectedKlant(null); setSelectedKlantCbs(null) }}
-                  className="ts-close-btn">✕</button>
+                </span>
+                <button onClick={() => setSelectedKlant(null)} className="ts-close-btn" style={{ marginLeft: 'auto' }}>✕</button>
               </div>
               <div ref={cbsKlantRef} style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
                 {((() => {
-                  const dL = selectedKlantCbs.cbs_leeftijd - profiel.leeftijd
-                  const dV = selectedKlantCbs.pct_vrouw - profiel.pctVrouw
-                  const dK = selectedKlantCbs.pct_koop - profiel.pctKoop
+                  const leeftijd = klantCbsData.cbs_leeftijd ?? 0
+                  const vrouw    = klantCbsData.pct_vrouw    ?? 0
+                  const koop     = klantCbsData.pct_koop     ?? 0
+                  const inwoners = klantCbsData.inwoners      ?? 0
+                  const pen      = inwoners > 0 ? (klantCbsData.klant_count / inwoners * 100) : 0
                   return [
-                  { label: 'Leeftijd', Icon: Users,      gebied: `${Math.round(selectedKlantCbs.cbs_leeftijd * 10) / 10}jr`, color: '#C2A46A', glow: 'rgba(194,164,106,0.18)',
-                    refVal: `profiel: ${profiel.leeftijd}jr gem.`,
-                    match: Math.abs(dL) <= 5 ? 'Goed' : Math.abs(dL) <= 10 ? 'Ok' : 'Ver',
-                    detail: Math.abs(dL) <= 2 ? 'Zelfde leeftijdsgroep' : `${Math.abs(Math.round(dL))}jr ${dL > 0 ? 'ouder' : 'jonger'} dan jouw klantprofiel` },
-                  { label: 'Geslacht', Icon: TrendingUp, gebied: `V ${Math.round(selectedKlantCbs.pct_vrouw)}%`, color: '#B87888', glow: 'rgba(184,120,136,0.18)',
-                    refVal: `M ${Math.round(100 - selectedKlantCbs.pct_vrouw)}% · profiel V ${profiel.pctVrouw}%`,
-                    match: Math.abs(dV) <= 5 ? 'Goed' : Math.abs(dV) <= 10 ? 'Ok' : 'Ver',
-                    detail: Math.abs(dV) <= 2 ? 'Zelfde geslachtsverdeling' : `${Math.abs(Math.round(dV))}% ${dV > 0 ? 'meer vrouwen' : 'minder vrouwen'} dan jouw klantprofiel` },
-                  { label: '%Koopwoning', Icon: Home,    gebied: `${Math.round(selectedKlantCbs.pct_koop * 10) / 10}%`, color: '#8878B8', glow: 'rgba(136,120,184,0.18)',
-                    refVal: `profiel: ${profiel.pctKoop}% gem.`,
-                    match: Math.abs(dK) <= 10 ? 'Goed' : Math.abs(dK) <= 20 ? 'Ok' : 'Ver',
-                    detail: Math.abs(dK) <= 5 ? 'Zelfde woningbezit' : `${Math.abs(Math.round(dK))}% ${dK > 0 ? 'meer' : 'minder'} koopwoningen dan jouw klantprofiel` },
-                  { label: 'Inwoners', Icon: Building2,  gebied: (selectedKlant.inwoners ?? 0) >= 1000 ? `${((selectedKlant.inwoners ?? 0)/1000).toFixed(1)}K` : `${selectedKlant.inwoners ?? 0}`, color: '#5888A8', glow: 'rgba(88,136,168,0.18)',
-                    refVal: `${(selectedKlant.klant_count / Math.max(1, selectedKlant.inwoners ?? 1) * 100).toFixed(1)}% penetratie`,
-                    match: (selectedKlant.inwoners ?? 0) >= 5000 ? 'Goed' : (selectedKlant.inwoners ?? 0) >= 1500 ? 'Ok' : 'Ver',
-                    detail: (selectedKlant.inwoners ?? 0) >= 5000 ? 'Groot marktpotentieel' : (selectedKlant.inwoners ?? 0) >= 1500 ? 'Gemiddeld potentieel' : 'Klein gebied — beperkt potentieel' },
-                ]})() as { label: string; Icon: React.ElementType; gebied: string; color: string; glow: string; match: string; detail: string; refVal: string }[]).map((cb, i) => (
-                  <div key={cb.label} style={{ flex: 1, padding: '6px 10px', borderLeft: i > 0 ? '1px solid rgba(255,255,255,0.07)' : 'none', borderTop: `2px solid ${cb.color}55`, display: 'flex', flexDirection: 'column', gap: '4px', overflow: 'hidden' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px', flexShrink: 0 }}>
-                      <span style={{ fontSize: '8px', fontWeight: 700, color: cb.color, textTransform: 'uppercase', letterSpacing: '0.06em', display: 'flex', alignItems: 'center', gap: '3px', whiteSpace: 'nowrap' }}>
-                        {React.createElement(cb.Icon, { size: 9, style: { color: cb.color, flexShrink: 0 } })}
-                        {cb.label}
-                      </span>
-                      <Badge variant={cb.match === 'Goed' ? 'match' : cb.match === 'Ok' ? 'warn' : 'danger'} className="text-[7px] py-0 px-1" style={{ flexShrink: 0 }}>
-                        {cb.match === 'Goed' ? 'GOED' : cb.match === 'Ok' ? 'OK' : 'VER'}
-                      </Badge>
+                    { label: 'Leeftijd',    waarde: `${Math.round(leeftijd * 10) / 10}jr`, color: '#C2A46A', glow: 'rgba(194,164,106,0.22)' },
+                    { label: 'Geslacht',    waarde: `V ${Math.round(vrouw)}% · M ${Math.round(100 - vrouw)}%`, color: '#B87888', glow: 'rgba(184,120,136,0.22)' },
+                    { label: '%Koopwoning', waarde: `${Math.round(koop * 10) / 10}%`,       color: '#8878B8', glow: 'rgba(136,120,184,0.22)' },
+                    { label: 'Penetratie',  waarde: pen > 0 ? `${pen.toFixed(1)}%` : '—',   color: '#5888A8', glow: 'rgba(88,136,168,0.22)'  },
+                  ]
+                })() as { label: string; waarde: string; color: string; glow: string }[]).map((cb, i) => (
+                  <div key={cb.label} style={{
+                    flex: 1, padding: '10px 12px',
+                    borderLeft: i > 0 ? '1px solid rgba(255,255,255,0.06)' : 'none',
+                    borderTop: `2px solid ${cb.color}44`,
+                    display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '6px',
+                    overflow: 'hidden',
+                  }}>
+                    <span style={{ fontSize: '8px', fontWeight: 600, color: `${cb.color}99`, textTransform: 'uppercase', letterSpacing: '0.10em', whiteSpace: 'nowrap' }}>
+                      {cb.label}
+                    </span>
+                    <div style={{ fontSize: cb.waarde.length > 8 ? '16px' : '22px', fontWeight: 700, lineHeight: 1, color: cb.color, fontFamily: 'var(--font-dotmatrix)', textShadow: `0 0 14px ${cb.glow}`, whiteSpace: 'nowrap' }}>
+                      {cb.waarde}
                     </div>
-                    <div style={{ fontSize: '20px', fontWeight: 700, lineHeight: 1, color: cb.color, fontFamily: 'var(--font-dotmatrix)', textShadow: `0 0 10px ${cb.glow}`, whiteSpace: 'nowrap', flexShrink: 0 }}>
-                      {cb.gebied}
-                    </div>
-                    <p style={{ fontSize: '9px', color: 'rgba(232,245,242,0.55)', lineHeight: 1.3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{cb.detail}</p>
-                    {cb.refVal && (
-                      <p style={{ fontSize: '8px', color: 'rgba(232,245,242,0.30)', marginTop: 'auto', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 0 }}>{cb.refVal}</p>
-                    )}
                   </div>
                 ))}
               </div>
@@ -655,11 +649,11 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
           )}
 
           {/* No CBS data — klant */}
-          {selectedKlant && !loadingKlantCbs && !selectedKlantCbs && (
+          {viewTab === 'klanten' && selectedKlant && !klantCbsData && (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
                 <div style={{ background: 'rgba(103,191,218,0.10)', border: '1px solid rgba(103,191,218,0.28)', borderRadius: 'var(--r-sm)', padding: '3px 10px', fontSize: '13px', fontWeight: 700, color: 'var(--accent-2)', fontFamily: 'var(--font-mono)' }}>{selectedKlant.postcode}</div>
-                <button onClick={() => { setSelectedKlant(null); setSelectedKlantCbs(null) }} className="ts-close-btn">✕</button>
+                <button onClick={() => { setSelectedKlant(null) }} className="ts-close-btn">✕</button>
               </div>
               <p style={{ fontSize: '11px', color: S.t2 }}>Geen CBS-data voor <strong style={{ color: 'var(--accent-2)', fontFamily: 'var(--font-mono)' }}>{selectedKlant.postcode}</strong>.</p>
             </div>
@@ -680,7 +674,7 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
         ] as { id: 'kaart'|'postcodes'|'klanten'; label: string; Icon: React.ElementType; accent: string }[]).map(({ id, label, Icon, accent }) => {
           const isActive = viewTab === id
           return (
-            <button key={id} onClick={() => { setViewTab(id); if (id === 'klanten') { setSelectedKans(null); setSelectedCbs(null) } }}
+            <button key={id} onClick={() => { setViewTab(id); if (id === 'klanten') { setSelectedKans(null) } }}
               aria-label={`Tab: ${label}`} aria-pressed={isActive}
               className={isActive ? 'ts-tab-btn active' : 'ts-tab-btn'}
               style={{ borderBottom: 'none' }}>
@@ -858,14 +852,14 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
                     background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
                     borderRadius: '4px', padding: '2px 7px', flexShrink: 0,
                   }}>
-                    {sortedKlanten.length} gebieden
+                    {klantTable.getFilteredRowModel().rows.length} gebieden
                   </span>
                 )}
               </div>
 
               {/* Dropdown resultaten */}
               {searchFocused && klantSearch.trim() && (() => {
-                const hits = sortedKlanten.slice(0, 6)
+                const hits = klantTable.getFilteredRowModel().rows.slice(0, 6).map(r => r.original)
                 if (!hits.length) return null
                 return (
                   <div style={{
@@ -929,9 +923,9 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
                         </div>
                       )
                     })}
-                    {sortedKlanten.length > 6 && (
+                    {klantTable.getFilteredRowModel().rows.length > 6 && (
                       <div style={{ padding: '8px 14px', fontSize: '10px', color: S.t4, fontFamily: 'var(--font-mono)', textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-                        +{sortedKlanten.length - 6} meer resultaten in de lijst
+                        +{klantTable.getFilteredRowModel().rows.length - 6} meer resultaten in de lijst
                       </div>
                     )}
                   </div>
@@ -969,37 +963,43 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
               <TableHeader className="[&_tr]:border-white/10" style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                 <TableRow className="hover:bg-transparent border-0" style={{ background: 'rgba(8,10,24,0.97)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)' }}>
                   {([
-                    { key: null,       label: '#',        w: 'w-8' },
-                    { key: 'postcode', label: 'Postcode', w: 'w-28' },
-                    { key: 'klanten',  label: 'Klanten',  w: 'w-20' },
-                    { key: 'pen',      label: 'Pen.',     w: 'w-20' },
-                    { key: 'leeftijd', label: 'Leeftijd', w: 'w-20' },
-                    { key: 'vrouw',    label: '%Vrouw',   w: 'w-18' },
-                    { key: 'koop',     label: '%Koop',    w: 'w-18' },
-                    { key: null,       label: 'Inwoners', w: 'w-20' },
-                  ] as { key: 'klanten'|'pen'|'postcode'|'leeftijd'|'man'|'vrouw'|'koop'|null; label: string; w: string }[]).map(h => (
-                    <TableHead
-                      key={h.label}
-                      className={`${h.w} ${h.key ? 'cursor-pointer select-none hover:text-foreground/80' : ''}`}
-                      onClick={() => h.key && handleKlantSort(h.key)}
-                    >
-                      <span className="flex items-center gap-1">
-                        {h.label}
-                        {h.key === klantSort && (
-                          <span className="text-[10px] opacity-70">{klantSortDir === 'desc' ? '▼' : '▲'}</span>
-                        )}
-                      </span>
-                    </TableHead>
-                  ))}
+                    { colId: null,           label: '#',        w: 'w-8' },
+                    { colId: 'postcode',     label: 'Postcode', w: 'w-28' },
+                    { colId: 'klant_count',  label: 'Klanten',  w: 'w-20' },
+                    { colId: 'penetratie',   label: 'Pen.',     w: 'w-20' },
+                    { colId: 'cbs_leeftijd', label: 'Leeftijd', w: 'w-20' },
+                    { colId: 'pct_vrouw',    label: '%Vrouw',   w: 'w-18' },
+                    { colId: 'pct_koop',     label: '%Koop',    w: 'w-18' },
+                    { colId: 'inwoners',     label: 'Inwoners', w: 'w-20' },
+                  ] as { colId: string | null; label: string; w: string }[]).map(h => {
+                    const col = h.colId ? klantTable.getColumn(h.colId) : null
+                    const sorted = col?.getIsSorted()
+                    return (
+                      <TableHead
+                        key={h.label}
+                        className={`${h.w} ${col ? 'cursor-pointer select-none hover:text-foreground/80' : ''}`}
+                        onClick={() => col?.toggleSorting()}
+                      >
+                        <span className="flex items-center gap-1">
+                          {h.label}
+                          {sorted && (
+                            <span className="text-[10px] opacity-70">{sorted === 'desc' ? '▼' : '▲'}</span>
+                          )}
+                        </span>
+                      </TableHead>
+                    )
+                  })}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedKlanten.map((k, i) => {
+                {klantTable.getRowModel().rows.map((row) => {
+                  const k = row.original
+                  const i = row.index
                   const stad   = getStad(k.postcode)
                   const pen    = (k.inwoners ?? 0) > 0 ? Math.min(100, k.klant_count / k.inwoners! * 100) : 0
                   const penStr = (k.inwoners ?? 0) > 0 ? pen.toFixed(1) + '%' : '—'
                   const penRatio = (k.inwoners ?? 0) > 0 ? Math.min(1, k.klant_count / k.inwoners!) : 0
-                  const pct    = klantSort === 'pen'
+                  const pct    = klantSorting[0]?.id === 'penetratie'
                     ? Math.round(penRatio / maxKlantPen * 100)
                     : Math.round(k.klant_count / maxKlantCount * 100)
                   const bc     = pct >= 80 ? '#67BFDA' : pct >= 50 ? '#4A9AB0' : pct >= 25 ? '#2D7490' : '#1A5068'
@@ -1062,7 +1062,7 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
                 <button key={id} className="ts-toggle-btn"
                   onClick={() => {
                     setHeatMode(id)
-                    setSelectedKans(null); setSelectedCbs(null)
+                    setSelectedKans(null)
                     setFlyTarget(overviewTarget)
                   }}
                   aria-label={`Kaartmodus: ${label}`} aria-pressed={heatMode === id}
@@ -1124,7 +1124,7 @@ export default function Dashboard({ matches, kansen, klantGebieden }: DashboardP
               radiusKm={BEDRIJF.radiusKm}
               reistijdMin={BEDRIJF.reistijdMin}
               onSelectKans={handleSelectKans}
-              onDeselectKans={() => { setSelectedKans(null); setSelectedCbs(null); setFlyTarget(null) }}
+              onDeselectKans={() => { setSelectedKans(null); setFlyTarget(null) }}
             />
           </div>
 

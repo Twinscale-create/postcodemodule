@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { supabase } from '@/lib/supabase'
 import { Match, KansPunt, KlantGebied } from '@/types'
 import Dashboard from '@/components/Dashboard'
